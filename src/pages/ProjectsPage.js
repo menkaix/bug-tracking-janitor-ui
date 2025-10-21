@@ -69,6 +69,11 @@ const ProjectsPage = () => {
     loadProjects(page);
   };
 
+  const handlePageSizeChange = (newSize) => {
+    setPagination(prev => ({ ...prev, size: newSize }));
+    loadProjects(0); // Retourner à la première page lors du changement de taille
+  };
+
   const handleCreateProject = () => {
     setEditingProject(null);
     setFormData({
@@ -94,7 +99,12 @@ const ProjectsPage = () => {
 
     const result = await projectService.deleteProject(id);
     if (result.success) {
-      loadProjects(pagination.currentPage);
+      // Si on supprime le dernier projet de la page et qu'on n'est pas sur la première page,
+      // revenir à la page précédente
+      const willBeEmpty = projects.length === 1;
+      const notFirstPage = pagination.currentPage > 0;
+      const targetPage = willBeEmpty && notFirstPage ? pagination.currentPage - 1 : pagination.currentPage;
+      loadProjects(targetPage);
     } else {
       alert('Erreur lors de la suppression du projet');
     }
@@ -178,7 +188,10 @@ const ProjectsPage = () => {
       <Pagination
         currentPage={pagination.currentPage}
         totalPages={pagination.totalPages}
+        totalElements={pagination.totalElements}
+        pageSize={pagination.size}
         onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
       />
 
       {showModal && (

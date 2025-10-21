@@ -4,56 +4,145 @@ import './Pagination.css';
 /**
  * Composant de pagination réutilisable
  */
-const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+const Pagination = ({
+  currentPage,
+  totalPages,
+  totalElements = 0,
+  pageSize = 10,
+  onPageChange,
+  onPageSizeChange
+}) => {
   const getPageNumbers = () => {
     const pages = [];
     const maxPagesToShow = 5;
+    const delta = 2; // Nombre de pages à afficher de chaque côté de la page courante
 
-    let startPage = Math.max(0, currentPage - Math.floor(maxPagesToShow / 2));
-    let endPage = Math.min(totalPages - 1, startPage + maxPagesToShow - 1);
+    if (totalPages <= maxPagesToShow + 2) {
+      // Si peu de pages, afficher toutes
+      for (let i = 0; i < totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Toujours afficher la première page
+      pages.push(0);
 
-    if (endPage - startPage < maxPagesToShow - 1) {
-      startPage = Math.max(0, endPage - maxPagesToShow + 1);
-    }
+      // Calculer la plage autour de la page courante
+      let startPage = Math.max(1, currentPage - delta);
+      let endPage = Math.min(totalPages - 2, currentPage + delta);
 
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
+      // Ajouter ellipse gauche si nécessaire
+      if (startPage > 1) {
+        pages.push('ellipsis-left');
+      }
+
+      // Pages du milieu
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
+
+      // Ajouter ellipse droite si nécessaire
+      if (endPage < totalPages - 2) {
+        pages.push('ellipsis-right');
+      }
+
+      // Toujours afficher la dernière page
+      pages.push(totalPages - 1);
     }
 
     return pages;
   };
 
-  if (totalPages <= 1) return null;
+  if (totalPages <= 1 && !onPageSizeChange) return null;
+
+  const pageNumbers = getPageNumbers();
+  const startItem = currentPage * pageSize + 1;
+  const endItem = Math.min((currentPage + 1) * pageSize, totalElements);
 
   return (
-    <div className="pagination">
-      <button
-        className="pagination-btn"
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 0}
-      >
-        ← Précédent
-      </button>
+    <div className="pagination-container">
+      {totalElements > 0 && (
+        <div className="pagination-info">
+          <span>
+            Affichage {startItem} - {endItem} sur {totalElements}
+          </span>
+          {onPageSizeChange && (
+            <div className="pagination-size-selector">
+              <label htmlFor="pageSize">Éléments par page:</label>
+              <select
+                id="pageSize"
+                value={pageSize}
+                onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                className="pagination-size-select"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          )}
+        </div>
+      )}
 
-      <div className="pagination-numbers">
-        {getPageNumbers().map((page) => (
+      {totalPages > 1 && (
+        <div className="pagination">
           <button
-            key={page}
-            className={`pagination-number ${page === currentPage ? 'active' : ''}`}
-            onClick={() => onPageChange(page)}
+            className="pagination-btn pagination-btn-first"
+            onClick={() => onPageChange(0)}
+            disabled={currentPage === 0}
+            title="Première page"
           >
-            {page + 1}
+            ⟨⟨
           </button>
-        ))}
-      </div>
 
-      <button
-        className="pagination-btn"
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages - 1}
-      >
-        Suivant →
-      </button>
+          <button
+            className="pagination-btn"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 0}
+          >
+            ← Précédent
+          </button>
+
+          <div className="pagination-numbers">
+            {pageNumbers.map((page, index) => {
+              if (typeof page === 'string') {
+                return (
+                  <span key={page} className="pagination-ellipsis">
+                    ...
+                  </span>
+                );
+              }
+              return (
+                <button
+                  key={page}
+                  className={`pagination-number ${page === currentPage ? 'active' : ''}`}
+                  onClick={() => onPageChange(page)}
+                >
+                  {page + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            className="pagination-btn"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages - 1}
+          >
+            Suivant →
+          </button>
+
+          <button
+            className="pagination-btn pagination-btn-last"
+            onClick={() => onPageChange(totalPages - 1)}
+            disabled={currentPage === totalPages - 1}
+            title="Dernière page"
+          >
+            ⟩⟩
+          </button>
+        </div>
+      )}
     </div>
   );
 };

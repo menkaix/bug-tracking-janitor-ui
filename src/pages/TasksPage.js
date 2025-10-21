@@ -29,7 +29,7 @@ const TasksPage = () => {
     title: '',
     description: '',
     projectCode: '',
-    status: 'open',
+    status: 'todo',
     estimate: '',
     trackingReference: '',
     plannedStart: '',
@@ -87,13 +87,18 @@ const TasksPage = () => {
     loadTasks(page);
   };
 
+  const handlePageSizeChange = (newSize) => {
+    setPagination(prev => ({ ...prev, size: newSize }));
+    loadTasks(0); // Retourner à la première page lors du changement de taille
+  };
+
   const handleCreateTask = () => {
     setEditingTask(null);
     setFormData({
       title: '',
       description: '',
       projectCode: '',
-      status: 'open',
+      status: 'todo',
       estimate: '',
       trackingReference: '',
       plannedStart: '',
@@ -108,7 +113,7 @@ const TasksPage = () => {
       title: task.title || '',
       description: task.description || '',
       projectCode: task.projectCode || '',
-      status: task.status || 'open',
+      status: task.status || 'todo',
       estimate: task.estimate || '',
       trackingReference: task.trackingReference || '',
       plannedStart: task.plannedStart ? task.plannedStart.split('T')[0] : '',
@@ -122,7 +127,12 @@ const TasksPage = () => {
 
     const result = await taskService.deleteTask(id);
     if (result.success) {
-      loadTasks(pagination.currentPage);
+      // Si on supprime la dernière tâche de la page et qu'on n'est pas sur la première page,
+      // revenir à la page précédente
+      const willBeEmpty = tasks.length === 1;
+      const notFirstPage = pagination.currentPage > 0;
+      const targetPage = willBeEmpty && notFirstPage ? pagination.currentPage - 1 : pagination.currentPage;
+      loadTasks(targetPage);
     } else {
       alert('Erreur lors de la suppression de la tâche');
     }
@@ -161,14 +171,39 @@ const TasksPage = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
-    const statusMap = {
-      open: { label: 'Ouvert', class: 'status-open' },
-      'in-progress': { label: 'En cours', class: 'status-progress' },
-      closed: { label: 'Fermé', class: 'status-closed' },
-    };
-    const statusInfo = statusMap[status] || { label: status, class: 'status-default' };
-    return <span className={`status-badge ${statusInfo.class}`}>{statusInfo.label}</span>;
+  const statusOptions = [
+    { value: 'todo', label: 'À faire', class: 'status-todo' },
+    { value: 'pending', label: 'En attente', class: 'status-pending' },
+    { value: 'in-progress', label: 'En cours', class: 'status-progress' },
+    { value: 'to-study', label: 'À étudier', class: 'status-study' },
+    { value: 'done', label: 'Terminé', class: 'status-done' },
+  ];
+
+  const getStatusInfo = (status) => {
+    return statusOptions.find(opt => opt.value === status) || { label: status, class: 'status-default' };
+  };
+
+  const handleStatusChange = async (taskId, newStatus) => {
+    // Mise à jour optimiste de l'UI
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId ? { ...task, status: newStatus } : task
+      )
+    );
+
+    // Appel API pour persister le changement
+    const task = tasks.find(t => t.id === taskId);
+    const result = await taskService.updateTask(taskId, { ...task, status: newStatus });
+
+    if (!result.success) {
+      // Revenir à l'ancien statut en cas d'erreur
+      setTasks(prevTasks =>
+        prevTasks.map(t =>
+          t.id === taskId ? { ...t, status: task.status } : t
+        )
+      );
+      alert('Erreur lors de la mise à jour du statut');
+    }
   };
 
   if (loading && tasks.length === 0) return <Loading message="Chargement des tâches..." />;
@@ -199,9 +234,11 @@ const TasksPage = () => {
           className="filter-select"
         >
           <option value="">Tous les statuts</option>
-          <option value="open">Ouvert</option>
-          <option value="in-progress">En cours</option>
-          <option value="closed">Fermé</option>
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -229,7 +266,20 @@ const TasksPage = () => {
                   )}
                 </td>
                 <td>{task.projectCode || '-'}</td>
-                <td>{getStatusBadge(task.status)}</td>
+                <td>
+                  <select
+                    value={task.status || 'todo'}
+                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                    className={`status-select ${getStatusInfo(task.status).class}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 <td>{formatDate(task.deadLine)}</td>
                 <td>{task.estimate || '-'}</td>
                 <td>
@@ -257,7 +307,10 @@ const TasksPage = () => {
       <Pagination
         currentPage={pagination.currentPage}
         totalPages={pagination.totalPages}
+        totalElements={pagination.totalElements}
+        pageSize={pagination.size}
         onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
       />
 
       {showModal && (
@@ -288,9 +341,11 @@ const TasksPage = () => {
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   >
-                    <option value="open">Ouvert</option>
-                    <option value="in-progress">En cours</option>
-                    <option value="closed">Fermé</option>
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

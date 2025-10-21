@@ -113,32 +113,74 @@
   color: #718096;
 }
 
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
+/* Status Select Box */
+.status-select {
+  padding: 6px 12px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  padding-right: 28px;
+  min-width: 140px;
 }
 
-.status-open {
-  background-color: #bee3f8;
-  color: #2c5282;
+.status-select:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.status-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Status Colors */
+.status-todo {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  border-color: #90caf9;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231565c0' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+}
+
+.status-pending {
+  background-color: #fff3e0;
+  color: #e65100;
+  border-color: #ffb74d;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e65100' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
 }
 
 .status-progress {
-  background-color: #feebc8;
-  color: #7c2d12;
+  background-color: #fef3c7;
+  color: #92400e;
+  border-color: #fbbf24;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2392400e' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
 }
 
-.status-closed {
-  background-color: #c6f6d5;
-  color: #22543d;
+.status-study {
+  background-color: #f3e5f5;
+  color: #6a1b9a;
+  border-color: #ba68c8;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236a1b9a' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+}
+
+.status-done {
+  background-color: #d1fae5;
+  color: #065f46;
+  border-color: #6ee7b7;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23065f46' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
 }
 
 .status-default {
   background-color: #e2e8f0;
   color: #4a5568;
+  border-color: #cbd5e0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%234a5568' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
 }
 
 .action-buttons {

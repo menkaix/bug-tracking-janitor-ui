@@ -1,9 +1,59 @@
+.pagination-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 0;
+}
+
+.pagination-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0 8px;
+  color: #4a5568;
+  font-size: 14px;
+}
+
+.pagination-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-size-selector label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pagination-size-select {
+  padding: 6px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  background-color: white;
+  color: #4a5568;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pagination-size-select:hover {
+  border-color: #cbd5e0;
+}
+
+.pagination-size-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
 .pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 24px 0;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .pagination-btn {
@@ -15,11 +65,13 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-width: 44px;
 }
 
 .pagination-btn:hover:not(:disabled) {
   background-color: #f7fafc;
   border-color: #cbd5e0;
+  transform: translateY(-1px);
 }
 
 .pagination-btn:disabled {
@@ -27,9 +79,16 @@
   cursor: not-allowed;
 }
 
+.pagination-btn-first,
+.pagination-btn-last {
+  font-size: 18px;
+  padding: 8px 12px;
+}
+
 .pagination-numbers {
   display: flex;
   gap: 4px;
+  align-items: center;
 }
 
 .pagination-number {
@@ -47,6 +106,7 @@
 .pagination-number:hover {
   background-color: #f7fafc;
   border-color: #cbd5e0;
+  transform: translateY(-1px);
 }
 
 .pagination-number.active {
@@ -55,15 +115,54 @@
   color: white;
 }
 
+.pagination-ellipsis {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a0aec0;
+  font-weight: bold;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .pagination {
+    gap: 6px;
+  }
+
+  .pagination-btn {
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+
+  .pagination-number {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .pagination-ellipsis {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 @media (max-width: 480px) {
   .pagination {
     flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .pagination-btn-first,
+  .pagination-btn-last {
+    display: none;
   }
 
   .pagination-numbers {
     order: 3;
     width: 100%;
     justify-content: center;
-    margin-top: 12px;
+    margin-top: 8px;
   }
 }
