@@ -1,0 +1,270 @@
+.log-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.log-viewer {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 1400px;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.log-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #333;
+  background: #252526;
+}
+
+.log-viewer-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 32px;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.btn-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.log-viewer-controls {
+  display: flex;
+  gap: 15px;
+  padding: 15px 20px;
+  border-bottom: 1px solid #333;
+  background: #252526;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.control-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.control-group label {
+  font-size: 13px;
+  color: #ccc;
+}
+
+.control-group select,
+.control-group input[type="text"] {
+  background: #3c3c3c;
+  border: 1px solid #555;
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.control-group input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+.control-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.control-actions button {
+  background: #0e639c;
+  border: none;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.control-actions button:hover {
+  background: #1177bb;
+}
+
+.btn-clear {
+  background: #c5000b !important;
+}
+
+.btn-clear:hover {
+  background: #e81123 !important;
+}
+
+.log-viewer-stats {
+  display: flex;
+  gap: 20px;
+  padding: 10px 20px;
+  background: #2d2d30;
+  border-bottom: 1px solid #333;
+  font-size: 12px;
+}
+
+.log-viewer-stats span {
+  color: #aaa;
+}
+
+.log-viewer-content {
+  flex: 1;
+  overflow: auto;
+  background: #1e1e1e;
+}
+
+.no-logs {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+}
+
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.log-table thead {
+  background: #252526;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.log-table th {
+  text-align: left;
+  padding: 10px 15px;
+  font-weight: 600;
+  color: #ccc;
+  border-bottom: 1px solid #333;
+}
+
+.log-table td {
+  padding: 8px 15px;
+  border-bottom: 1px solid #2d2d30;
+  vertical-align: top;
+}
+
+.log-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.log-timestamp {
+  color: #888;
+  white-space: nowrap;
+  font-family: monospace;
+}
+
+.log-level {
+  white-space: nowrap;
+}
+
+.level-badge {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.log-level-error .level-badge,
+.log-level-error {
+  background: rgba(229, 57, 53, 0.15);
+  color: #f48771;
+}
+
+.log-level-warn .level-badge,
+.log-level-warn {
+  background: rgba(255, 167, 38, 0.15);
+  color: #ffa726;
+}
+
+.log-level-info .level-badge,
+.log-level-info {
+  background: rgba(66, 165, 245, 0.15);
+  color: #64b5f6;
+}
+
+.log-level-debug .level-badge,
+.log-level-debug {
+  background: rgba(102, 187, 106, 0.15);
+  color: #81c784;
+}
+
+.log-message {
+  color: #d4d4d4;
+  word-break: break-word;
+}
+
+.log-context details {
+  cursor: pointer;
+}
+
+.log-context summary {
+  color: #569cd6;
+  font-size: 11px;
+  user-select: none;
+}
+
+.log-context pre {
+  margin: 8px 0 0 0;
+  padding: 8px;
+  background: #2d2d30;
+  border-radius: 4px;
+  overflow-x: auto;
+  color: #ce9178;
+  font-size: 11px;
+}
+
+.no-context {
+  color: #555;
+}
+
+/* Scrollbar styling */
+.log-viewer-content::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.log-viewer-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.log-viewer-content::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 6px;
+}
+
+.log-viewer-content::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
