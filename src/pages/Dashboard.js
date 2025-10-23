@@ -13,7 +13,7 @@ const Dashboard = () => {
     totalTasks: 0,
     totalProjects: 0,
     openTasks: 0,
-    closedTasks: 0,
+    completedTasks: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,14 +30,14 @@ const Dashboard = () => {
 
       if (tasksResult.success && projectsResult.success) {
         const tasks = tasksResult.data.content || [];
-        const openTasks = tasks.filter((t) => t.status !== 'closed').length;
-        const closedTasks = tasks.filter((t) => t.status === 'closed').length;
+        const completedTasks = tasks.filter((t) => t.status === 'done').length;
+        const openTasks = tasks.filter((t) => t.status !== 'done').length;
 
         setStats({
           totalTasks: tasksResult.data.totalElements || 0,
           totalProjects: projectsResult.data.totalElements || 0,
           openTasks,
-          closedTasks,
+          completedTasks,
         });
       } else {
         setError('Impossible de charger les données du tableau de bord');
@@ -91,8 +91,8 @@ const Dashboard = () => {
         <div className="stat-card stat-success">
           <div className="stat-icon">✅</div>
           <div className="stat-content">
-            <h3>Tâches Fermées</h3>
-            <p className="stat-number">{stats.closedTasks}</p>
+            <h3>Tâches Terminées</h3>
+            <p className="stat-number">{stats.completedTasks}</p>
           </div>
         </div>
       </div>

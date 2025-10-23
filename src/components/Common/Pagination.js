@@ -55,8 +55,13 @@ const Pagination = ({
   if (totalPages <= 1 && !onPageSizeChange) return null;
 
   const pageNumbers = getPageNumbers();
-  const startItem = currentPage * pageSize + 1;
-  const endItem = Math.min((currentPage + 1) * pageSize, totalElements);
+  // Gérer les valeurs par défaut pour éviter NaN
+  const safeCurrentPage = currentPage ?? 0;
+  const safePageSize = pageSize ?? 10;
+  const safeTotalElements = totalElements ?? 0;
+
+  const startItem = safeTotalElements > 0 ? safeCurrentPage * safePageSize + 1 : 0;
+  const endItem = safeTotalElements > 0 ? Math.min((safeCurrentPage + 1) * safePageSize, safeTotalElements) : 0;
 
   return (
     <div className="pagination-container">

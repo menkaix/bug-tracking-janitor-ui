@@ -36,21 +36,38 @@ const TasksPage = () => {
     deadLine: '',
   });
 
-  const loadTasks = async (page = 0) => {
+  const loadTasks = async (page = 0, size = null) => {
     setLoading(true);
     setError('');
 
     try {
       const filter = statusFilter ? `status:${statusFilter}` : '';
-      const result = await taskService.getAllTasks(page, pagination.size, searchTerm, filter);
+      const pageSize = size !== null ? size : pagination.size;
+      const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
 
       if (result.success) {
         setTasks(result.data.content || []);
+
+        // L'API Spring Boot renvoie 'number' pour currentPage, 'totalPages', 'totalElements', et 'size'
+        // Mais aussi 'pageable.pageNumber' dans certains cas
+        const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
+        const apiTotalPages = result.data.totalPages ?? 0;
+        const apiTotalElements = result.data.totalElements ?? 0;
+        const apiPageSize = result.data.size ?? pageSize;
+
+        console.log('Pagination data from API:', {
+          apiCurrentPage,
+          apiTotalPages,
+          apiTotalElements,
+          apiPageSize,
+          rawData: result.data
+        });
+
         setPagination({
-          currentPage: result.data.currentPage,
-          totalPages: result.data.totalPages,
-          totalElements: result.data.totalElements,
-          size: result.data.size,
+          currentPage: apiCurrentPage,
+          totalPages: apiTotalPages,
+          totalElements: apiTotalElements,
+          size: apiPageSize,
         });
       } else {
         setError(result.error || 'Impossible de charger les tâches');
@@ -84,12 +101,20 @@ const TasksPage = () => {
   }, [searchTerm, statusFilter]);
 
   const handlePageChange = (page) => {
+    // Validation des limites de page
+    if (page < 0) {
+      return;
+    }
+    // Si totalPages est défini, vérifier la limite supérieure
+    if (pagination.totalPages > 0 && page >= pagination.totalPages) {
+      return;
+    }
     loadTasks(page);
   };
 
   const handlePageSizeChange = (newSize) => {
     setPagination(prev => ({ ...prev, size: newSize }));
-    loadTasks(0); // Retourner à la première page lors du changement de taille
+    loadTasks(0, newSize); // Retourner à la première page avec la nouvelle taille
   };
 
   const handleCreateTask = () => {
