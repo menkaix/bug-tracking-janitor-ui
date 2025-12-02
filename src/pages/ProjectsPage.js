@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import projectService from '../services/project.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
@@ -9,6 +10,7 @@ import './ProjectsPage.css';
  * Page de gestion des projets
  */
 const ProjectsPage = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [pagination, setPagination] = useState({
     currentPage: 0,
@@ -128,6 +130,10 @@ const ProjectsPage = () => {
     }
   };
 
+  const handleViewTasks = (projectCode) => {
+    navigate(`/tasks?projectCode=${projectCode}`);
+  };
+
   if (loading && projects.length === 0) return <Loading message="Chargement des projets..." />;
 
   return (
@@ -172,6 +178,13 @@ const ProjectsPage = () => {
             <p className="project-description">
               {project.description || 'Aucune description'}
             </p>
+            <button
+              onClick={() => handleViewTasks(project.projectCode)}
+              className="btn-view-tasks"
+              title="Voir les tâches de ce projet"
+            >
+              Voir les tâches
+            </button>
           </div>
         ))}
       </div>

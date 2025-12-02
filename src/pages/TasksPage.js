@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import Loading from '../components/Common/Loading';
@@ -11,6 +12,7 @@ import './TasksPage.css';
  * Page de gestion des tâches
  */
 const TasksPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
   const [pagination, setPagination] = useState({
@@ -23,6 +25,7 @@ const TasksPage = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState(searchParams.get('projectCode') || '');
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [formData, setFormData] = useState({
@@ -41,7 +44,12 @@ const TasksPage = () => {
     setError('');
 
     try {
-      const filter = statusFilter ? `status:${statusFilter}` : '';
+      // Construire le filtre en combinant statut et projet
+      const filters = [];
+      if (statusFilter) filters.push(`status:${statusFilter}`);
+      if (projectFilter) filters.push(`projectCode:${projectFilter}`);
+      const filter = filters.join(',');
+
       const pageSize = size !== null ? size : pagination.size;
       const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
 
@@ -98,7 +106,7 @@ const TasksPage = () => {
     }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, projectFilter]);
 
   const handlePageChange = (page) => {
     // Validation des limites de page
@@ -262,6 +270,27 @@ const TasksPage = () => {
           {statusOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={projectFilter}
+          onChange={(e) => {
+            const newProjectCode = e.target.value;
+            setProjectFilter(newProjectCode);
+            // Mettre à jour l'URL si un projet est sélectionné
+            if (newProjectCode) {
+              setSearchParams({ projectCode: newProjectCode });
+            } else {
+              setSearchParams({});
+            }
+          }}
+          className="filter-select"
+        >
+          <option value="">Tous les projets</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.projectCode}>
+              {project.projectName} ({project.projectCode})
             </option>
           ))}
         </select>
