@@ -24,8 +24,12 @@ const TasksPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+
   const [projectFilter, setProjectFilter] = useState(searchParams.get('projectCode') || '');
+
+  const [statusFilter, setStatusFilter] = useState([]);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [formData, setFormData] = useState({
@@ -44,41 +48,90 @@ const TasksPage = () => {
     setError('');
 
     try {
-      // Construire le filtre en combinant statut et projet
-      const filters = [];
-      if (statusFilter) filters.push(`status:${statusFilter}`);
-      if (projectFilter) filters.push(`projectCode:${projectFilter}`);
-      const filter = filters.join(',');
-
       const pageSize = size !== null ? size : pagination.size;
-      const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
 
-      if (result.success) {
-        setTasks(result.data.content || []);
+      console.log('loadTasks called with:', { page, size, statusFilter, projectFilter, searchTerm });
 
-        // L'API Spring Boot renvoie 'number' pour currentPage, 'totalPages', 'totalElements', et 'size'
-        // Mais aussi 'pageable.pageNumber' dans certains cas
-        const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
-        const apiTotalPages = result.data.totalPages ?? 0;
-        const apiTotalElements = result.data.totalElements ?? 0;
-        const apiPageSize = result.data.size ?? pageSize;
+      // Si plusieurs status sont sélectionnés, faire plusieurs requêtes et combiner les résultats
+      if (statusFilter.length > 0) {
+        console.log('Filtrage avec statuts:', statusFilter);
 
-        console.log('Pagination data from API:', {
-          apiCurrentPage,
-          apiTotalPages,
-          apiTotalElements,
-          apiPageSize,
-          rawData: result.data
+        // Faire une requête pour chaque statut sélectionné (sans le filtre de projet dans la requête)
+        const promises = statusFilter.map(status => {
+          const filter = `status:${status}`;
+          console.log('Requête avec filtre:', filter);
+          return taskService.getAllTasks(0, 1000, searchTerm, filter);
         });
 
+        const results = await Promise.all(promises);
+        console.log('Résultats des requêtes:', results);
+
+        // Vérifier que toutes les requêtes ont réussi
+        const allSuccess = results.every(r => r.success);
+        if (!allSuccess) {
+          setError('Impossible de charger les tâches');
+          setLoading(false);
+          return;
+        }
+
+        // Combiner tous les résultats et dédupliquer par ID
+        const allTasks = results.flatMap(r => r.data.content || []);
+        console.log('Tâches combinées:', allTasks.length);
+        const uniqueTasks = Array.from(
+          new Map(allTasks.map(task => [task.id, task])).values()
+        );
+        console.log('Tâches uniques:', uniqueTasks.length);
+
+        // Filtrer par projet côté client
+        const filteredTasks = projectFilter
+          ? uniqueTasks.filter(task => task.projectCode === projectFilter)
+          : uniqueTasks;
+        console.log('Tâches après filtre projet:', filteredTasks.length);
+
+        // Pagination côté client
+        const totalElements = filteredTasks.length;
+        const totalPages = Math.ceil(totalElements / pageSize);
+        const startIndex = page * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
+
+        setTasks(paginatedTasks);
         setPagination({
-          currentPage: apiCurrentPage,
-          totalPages: apiTotalPages,
-          totalElements: apiTotalElements,
-          size: apiPageSize,
+          currentPage: page,
+          totalPages: totalPages,
+          totalElements: totalElements,
+          size: pageSize,
         });
       } else {
-        setError(result.error || 'Impossible de charger les tâches');
+        // Aucun filtre de statut, requête normale avec filtre de projet si présent
+        const filter = projectFilter ? `projectCode:${projectFilter}` : '';
+        const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
+
+        if (result.success) {
+          setTasks(result.data.content || []);
+
+          const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
+          const apiTotalPages = result.data.totalPages ?? 0;
+          const apiTotalElements = result.data.totalElements ?? 0;
+          const apiPageSize = result.data.size ?? pageSize;
+
+          console.log('Pagination data from API:', {
+            apiCurrentPage,
+            apiTotalPages,
+            apiTotalElements,
+            apiPageSize,
+            rawData: result.data
+          });
+
+          setPagination({
+            currentPage: apiCurrentPage,
+            totalPages: apiTotalPages,
+            totalElements: apiTotalElements,
+            size: apiPageSize,
+          });
+        } else {
+          setError(result.error || 'Impossible de charger les tâches');
+        }
       }
     } catch (err) {
       setError('Une erreur est survenue lors du chargement des tâches');
@@ -107,6 +160,20 @@ const TasksPage = () => {
     return () => clearTimeout(timer);
     // eslint-disable-next-line
   }, [searchTerm, statusFilter, projectFilter]);
+
+  // Fermer le dropdown quand on clique à l'extérieur
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showStatusDropdown && !event.target.closest('.status-filter-dropdown')) {
+        setShowStatusDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showStatusDropdown]);
 
   const handlePageChange = (page) => {
     // Validation des limites de page
@@ -239,6 +306,21 @@ const TasksPage = () => {
     }
   };
 
+  const toggleStatusFilter = (statusValue) => {
+    console.log('toggleStatusFilter called with:', statusValue);
+    setStatusFilter(prev => {
+      const newFilter = prev.includes(statusValue)
+        ? prev.filter(s => s !== statusValue)
+        : [...prev, statusValue];
+      console.log('New statusFilter:', newFilter);
+      return newFilter;
+    });
+  };
+
+  const clearStatusFilter = () => {
+    setStatusFilter([]);
+  };
+
   if (loading && tasks.length === 0) return <Loading message="Chargement des tâches..." />;
 
   return (
@@ -261,18 +343,7 @@ const TasksPage = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="search-input"
         />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="filter-select"
-        >
-          <option value="">Tous les statuts</option>
-          {statusOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+
         <select
           value={projectFilter}
           onChange={(e) => {
@@ -294,6 +365,50 @@ const TasksPage = () => {
             </option>
           ))}
         </select>
+
+        <div className="status-filter-dropdown">
+          <button
+            className="filter-select-button"
+            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+          >
+            {statusFilter.length === 0
+              ? 'Tous les statuts'
+              : statusFilter.length === 1
+              ? statusOptions.find(opt => opt.value === statusFilter[0])?.label
+              : `${statusFilter.length} statuts sélectionnés`}
+            <span className="dropdown-arrow">{showStatusDropdown ? '▲' : '▼'}</span>
+          </button>
+          {showStatusDropdown && (
+            <div className="status-dropdown-menu">
+              <div className="dropdown-header">
+                <span>Filtrer par statut</span>
+                {statusFilter.length > 0 && (
+                  <button
+                    className="clear-filter-btn"
+                    onClick={clearStatusFilter}
+                  >
+                    Effacer
+                  </button>
+                )}
+              </div>
+              <div className="dropdown-options">
+                {statusOptions.map((option) => (
+                  <label key={option.value} className="status-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={statusFilter.includes(option.value)}
+                      onChange={() => toggleStatusFilter(option.value)}
+                    />
+                    <span className={`status-badge ${option.class}`}>
+                      {option.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
 
       {error && <ErrorMessage message={error} onRetry={() => loadTasks(pagination.currentPage)} />}
