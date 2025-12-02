@@ -43,6 +43,21 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
+.stat-card.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.stat-card.clickable:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card.clickable:active {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
 .stat-icon {
   font-size: 48px;
   width: 64px;

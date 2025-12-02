@@ -27,7 +27,16 @@ const TasksPage = () => {
 
   const [projectFilter, setProjectFilter] = useState(searchParams.get('projectCode') || '');
 
-  const [statusFilter, setStatusFilter] = useState([]);
+  // Initialiser statusFilter depuis l'URL si présent (format: status=todo,pending,in-progress)
+  const initialStatusFilter = () => {
+    const statusParam = searchParams.get('status');
+    if (statusParam) {
+      return statusParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    }
+    return [];
+  };
+
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter());
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
@@ -280,6 +289,9 @@ const TasksPage = () => {
   ];
 
   const getStatusInfo = (status) => {
+    if (!status) {
+      return { label: 'Aucun statut', class: 'status-none' };
+    }
     return statusOptions.find(opt => opt.value === status) || { label: status, class: 'status-default' };
   };
 
@@ -306,6 +318,29 @@ const TasksPage = () => {
     }
   };
 
+  const handleProjectChange = async (taskId, newProjectCode) => {
+    // Mise à jour optimiste de l'UI
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId ? { ...task, projectCode: newProjectCode } : task
+      )
+    );
+
+    // Appel API pour persister le changement
+    const task = tasks.find(t => t.id === taskId);
+    const result = await taskService.updateTask(taskId, { ...task, projectCode: newProjectCode });
+
+    if (!result.success) {
+      // Revenir à l'ancien projet en cas d'erreur
+      setTasks(prevTasks =>
+        prevTasks.map(t =>
+          t.id === taskId ? { ...t, projectCode: task.projectCode } : t
+        )
+      );
+      alert('Erreur lors de la mise à jour du projet');
+    }
+  };
+
   const toggleStatusFilter = (statusValue) => {
     console.log('toggleStatusFilter called with:', statusValue);
     setStatusFilter(prev => {
@@ -313,12 +348,29 @@ const TasksPage = () => {
         ? prev.filter(s => s !== statusValue)
         : [...prev, statusValue];
       console.log('New statusFilter:', newFilter);
+
+      // Mettre à jour l'URL
+      updateURLWithFilters(newFilter, projectFilter);
+
       return newFilter;
     });
   };
 
   const clearStatusFilter = () => {
     setStatusFilter([]);
+    // Mettre à jour l'URL
+    updateURLWithFilters([], projectFilter);
+  };
+
+  const updateURLWithFilters = (statuses, project) => {
+    const params = {};
+    if (statuses.length > 0) {
+      params.status = statuses.join(',');
+    }
+    if (project) {
+      params.projectCode = project;
+    }
+    setSearchParams(params);
   };
 
   if (loading && tasks.length === 0) return <Loading message="Chargement des tâches..." />;
@@ -349,12 +401,8 @@ const TasksPage = () => {
           onChange={(e) => {
             const newProjectCode = e.target.value;
             setProjectFilter(newProjectCode);
-            // Mettre à jour l'URL si un projet est sélectionné
-            if (newProjectCode) {
-              setSearchParams({ projectCode: newProjectCode });
-            } else {
-              setSearchParams({});
-            }
+            // Mettre à jour l'URL avec tous les filtres
+            updateURLWithFilters(statusFilter, newProjectCode);
           }}
           className="filter-select"
         >
@@ -434,19 +482,40 @@ const TasksPage = () => {
                     <div className="task-reference">{task.trackingReference}</div>
                   )}
                 </td>
-                <td>{task.projectCode || '-'}</td>
                 <td>
                   <select
-                    value={task.status || 'todo'}
+                    value={task.projectCode || ''}
+                    onChange={(e) => handleProjectChange(task.id, e.target.value)}
+                    className="project-select"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <option value="">Aucun projet</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.projectCode}>
+                        {project.projectCode} - {project.projectName}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    value={task.status || ''}
                     onChange={(e) => handleStatusChange(task.id, e.target.value)}
                     className={`status-select ${getStatusInfo(task.status).class}`}
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <option value="">Aucun statut</option>
                     {statusOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
+                    {/* Afficher le statut personnalisé s'il n'est pas dans la liste */}
+                    {task.status && !statusOptions.find(opt => opt.value === task.status) && (
+                      <option value={task.status}>
+                        {task.status}
+                      </option>
+                    )}
                   </select>
                 </td>
                 <td>{formatDate(task.deadLine)}</td>

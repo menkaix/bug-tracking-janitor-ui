@@ -18,6 +18,9 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
   border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .project-card:hover {
@@ -79,6 +82,7 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  flex-grow: 1;
 }
 
 .btn-view-tasks {
@@ -93,6 +97,8 @@
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .btn-view-tasks:hover {
