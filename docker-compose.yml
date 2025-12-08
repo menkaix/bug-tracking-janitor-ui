@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  bug-tracking-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bug-tracking-janitor-ui
+    ports:
+      - "3001:80"
+    environment:
+      # L'URL de l'API doit être définie au moment du build
+      # Vous pouvez la modifier dans .env.production avant le build
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - bug-tracking-network
+
+networks:
+  bug-tracking-network:
+    driver: bridge
