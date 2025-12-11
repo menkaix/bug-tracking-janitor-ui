@@ -77,6 +77,10 @@
   background: rgba(66, 153, 225, 0.1);
 }
 
+.stat-purple .stat-icon {
+  background: rgba(118, 75, 162, 0.1);
+}
+
 .stat-warning .stat-icon {
   background: rgba(237, 137, 54, 0.1);
 }

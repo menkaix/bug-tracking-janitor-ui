@@ -37,6 +37,9 @@ const Navbar = ({ onLogout }) => {
           <Link to="/projects" className={`navbar-item ${isActive('/projects')}`}>
             Projets
           </Link>
+          <Link to="/persons" className={`navbar-item ${isActive('/persons')}`}>
+            Personnes
+          </Link>
         </div>
 
         <div className="navbar-actions">

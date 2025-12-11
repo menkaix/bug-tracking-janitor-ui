@@ -541,3 +541,188 @@
     max-height: 95vh;
   }
 }
+
+/* Styles pour les assignés dans le tableau */
+.assignees-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+}
+
+.assignees-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.assignee-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.assignee-badge .remove-assignee {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.assignee-badge .remove-assignee:hover {
+  opacity: 1;
+}
+
+.no-assignee {
+  color: #a0aec0;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.add-assignee-select {
+  padding: 6px 8px;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-assignee-select:hover {
+  border-color: #667eea;
+}
+
+.add-assignee-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Styles pour les assignés dans le formulaire */
+.assignees-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #f7fafc;
+}
+
+.selected-assignees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px;
+  background-color: white;
+  border-radius: 6px;
+  align-items: center;
+}
+
+.selected-assignee-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.selected-assignee-badge .remove-badge {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.selected-assignee-badge .remove-badge:hover {
+  opacity: 1;
+}
+
+.no-selection {
+  color: #a0aec0;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.available-assignees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.assignee-option {
+  padding: 6px 12px;
+  background-color: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.assignee-option:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.no-options {
+  color: #a0aec0;
+  font-style: italic;
+  font-size: 13px;
+  padding: 8px;
+}
+
+/* Scrollbar personnalisée pour la liste des personnes disponibles */
+.available-assignees::-webkit-scrollbar {
+  width: 6px;
+}
+
+.available-assignees::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.available-assignees::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.available-assignees::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}

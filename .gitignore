@@ -31,3 +31,4 @@ yarn-error.log*
 
 # Environment variables (keep .env.example)
 .env
+.claude/
