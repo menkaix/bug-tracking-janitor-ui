@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
+import personService from '../services/person.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
@@ -15,6 +16,7 @@ const TasksPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [persons, setPersons] = useState([]);
   const [pagination, setPagination] = useState({
     currentPage: 0,
     totalPages: 0,
@@ -50,7 +52,19 @@ const TasksPage = () => {
     trackingReference: '',
     plannedStart: '',
     deadLine: '',
+    assignees: [],
   });
+
+  // Fonctions helper pour convertir assignee (backend) <-> assignees (frontend)
+  const assigneeToArray = (assigneeString) => {
+    if (!assigneeString) return [];
+    return assigneeString.split(',').map(e => e.trim()).filter(e => e);
+  };
+
+  const arrayToAssignee = (assigneesArray) => {
+    if (!assigneesArray || assigneesArray.length === 0) return '';
+    return assigneesArray.join(',');
+  };
 
   const loadTasks = async (page = 0, size = null) => {
     setLoading(true);
@@ -156,9 +170,17 @@ const TasksPage = () => {
     }
   };
 
+  const loadPersons = async () => {
+    const result = await personService.getAllPersons(0, 1000);
+    if (result.success) {
+      setPersons(result.data.content || []);
+    }
+  };
+
   useEffect(() => {
     loadTasks();
     loadProjects();
+    loadPersons();
     // eslint-disable-next-line
   }, []);
 
@@ -212,6 +234,7 @@ const TasksPage = () => {
       trackingReference: '',
       plannedStart: '',
       deadLine: '',
+      assignees: [],
     });
     setShowModal(true);
   };
@@ -227,6 +250,7 @@ const TasksPage = () => {
       trackingReference: task.trackingReference || '',
       plannedStart: task.plannedStart ? task.plannedStart.split('T')[0] : '',
       deadLine: task.deadLine ? task.deadLine.split('T')[0] : '',
+      assignees: assigneeToArray(task.assignee),
     });
     setShowModal(true);
   };
@@ -250,8 +274,11 @@ const TasksPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Préparer les données pour le backend
+    const { assignees, ...restFormData } = formData;
     const taskData = {
-      ...formData,
+      ...restFormData,
+      assignee: arrayToAssignee(assignees), // Convertir array -> string
       plannedStart: formData.plannedStart ? new Date(formData.plannedStart).toISOString() : null,
       deadLine: formData.deadLine ? new Date(formData.deadLine).toISOString() : null,
     };
@@ -339,6 +366,87 @@ const TasksPage = () => {
       );
       alert('Erreur lors de la mise à jour du projet');
     }
+  };
+
+  // Fonction helper pour obtenir les prénoms des assignés depuis leurs emails
+  const getAssigneesNames = (assignees) => {
+    if (!assignees || assignees.length === 0) return [];
+    return assignees
+      .map(email => {
+        const person = persons.find(p => p.email === email);
+        return person ? person.firstName : email;
+      })
+      .filter(name => name);
+  };
+
+  // Fonction pour ajouter un assigné à une tâche
+  const handleAddAssignee = async (taskId, email) => {
+    const task = tasks.find(t => t.id === taskId);
+    const currentAssignees = assigneeToArray(task.assignee);
+
+    if (currentAssignees.includes(email)) {
+      return; // Déjà assigné
+    }
+
+    const newAssignees = [...currentAssignees, email];
+
+    // Mise à jour optimiste de l'UI (garder le format array pour l'affichage)
+    setTasks(prevTasks =>
+      prevTasks.map(t =>
+        t.id === taskId ? { ...t, assignee: arrayToAssignee(newAssignees) } : t
+      )
+    );
+
+    // Appel API avec le format backend (string)
+    const result = await taskService.updateTask(taskId, { ...task, assignee: arrayToAssignee(newAssignees) });
+
+    if (!result.success) {
+      // Revenir à l'ancien état en cas d'erreur
+      setTasks(prevTasks =>
+        prevTasks.map(t =>
+          t.id === taskId ? { ...t, assignee: task.assignee } : t
+        )
+      );
+      alert('Erreur lors de l\'assignation');
+    }
+  };
+
+  // Fonction pour retirer un assigné d'une tâche
+  const handleRemoveAssignee = async (taskId, email) => {
+    const task = tasks.find(t => t.id === taskId);
+    const currentAssignees = assigneeToArray(task.assignee);
+    const newAssignees = currentAssignees.filter(e => e !== email);
+
+    // Mise à jour optimiste de l'UI
+    setTasks(prevTasks =>
+      prevTasks.map(t =>
+        t.id === taskId ? { ...t, assignee: arrayToAssignee(newAssignees) } : t
+      )
+    );
+
+    // Appel API avec le format backend (string)
+    const result = await taskService.updateTask(taskId, { ...task, assignee: arrayToAssignee(newAssignees) });
+
+    if (!result.success) {
+      // Revenir à l'ancien état en cas d'erreur
+      setTasks(prevTasks =>
+        prevTasks.map(t =>
+          t.id === taskId ? { ...t, assignee: task.assignee } : t
+        )
+      );
+      alert('Erreur lors de la désassignation');
+    }
+  };
+
+  // Fonction pour gérer le changement d'assignés dans le formulaire
+  const handleAssigneeToggle = (email) => {
+    setFormData(prev => {
+      const currentAssignees = prev.assignees || [];
+      const newAssignees = currentAssignees.includes(email)
+        ? currentAssignees.filter(e => e !== email)
+        : [...currentAssignees, email];
+      return { ...prev, assignees: newAssignees };
+    });
   };
 
   const toggleStatusFilter = (statusValue) => {
@@ -467,6 +575,7 @@ const TasksPage = () => {
             <tr>
               <th>Titre</th>
               <th>Projet</th>
+              <th>Assignés</th>
               <th>Statut</th>
               <th>Échéance</th>
               <th>Estimation</th>
@@ -496,6 +605,57 @@ const TasksPage = () => {
                       </option>
                     ))}
                   </select>
+                </td>
+                <td>
+                  <div className="assignees-cell">
+                    <div className="assignees-list">
+                      {(() => {
+                        const assigneesArray = assigneeToArray(task.assignee);
+                        const names = getAssigneesNames(assigneesArray);
+                        return names.map((name, index) => {
+                          const email = assigneesArray[index];
+                          return (
+                            <span key={email} className="assignee-badge">
+                              {name}
+                              <button
+                                className="remove-assignee"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveAssignee(task.id, email);
+                                }}
+                                title={`Retirer ${name}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        });
+                      })()}
+                      {(!task.assignee || task.assignee.length === 0) && (
+                        <span className="no-assignee">Non assigné</span>
+                      )}
+                    </div>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddAssignee(task.id, e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="add-assignee-select"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <option value="">+ Assigner</option>
+                      {persons
+                        .filter(p => !assigneeToArray(task.assignee).includes(p.email))
+                        .map((person) => (
+                          <option key={person.id} value={person.email}>
+                            {person.firstName} {person.lastName}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </td>
                 <td>
                   <select
@@ -655,6 +815,52 @@ const TasksPage = () => {
                   }
                   placeholder="ex: JIRA-12345"
                 />
+              </div>
+
+              <div className="form-group">
+                <label>Assignés</label>
+                <div className="assignees-selector">
+                  <div className="selected-assignees">
+                    {(formData.assignees || []).map(email => {
+                      const person = persons.find(p => p.email === email);
+                      const name = person ? `${person.firstName} ${person.lastName}` : email;
+                      return (
+                        <span key={email} className="selected-assignee-badge">
+                          {name}
+                          <button
+                            type="button"
+                            className="remove-badge"
+                            onClick={() => handleAssigneeToggle(email)}
+                            title={`Retirer ${name}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                    {(!formData.assignees || formData.assignees.length === 0) && (
+                      <span className="no-selection">Aucun assigné</span>
+                    )}
+                  </div>
+                  <div className="available-assignees">
+                    {persons
+                      .filter(p => !(formData.assignees || []).includes(p.email))
+                      .map(person => (
+                        <button
+                          key={person.id}
+                          type="button"
+                          className="assignee-option"
+                          onClick={() => handleAssigneeToggle(person.email)}
+                          title={`Assigner à ${person.firstName} ${person.lastName}`}
+                        >
+                          + {person.firstName} {person.lastName}
+                        </button>
+                      ))}
+                    {persons.filter(p => !(formData.assignees || []).includes(p.email)).length === 0 && (
+                      <span className="no-options">Toutes les personnes sont assignées</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="form-actions">

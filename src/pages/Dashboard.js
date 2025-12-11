@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
+import personService from '../services/person.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import './Dashboard.css';
@@ -14,6 +15,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     totalTasks: 0,
     totalProjects: 0,
+    totalPersons: 0,
     openTasks: 0,
     completedTasks: 0,
   });
@@ -25,13 +27,14 @@ const Dashboard = () => {
     setError('');
 
     try {
-      // Charger toutes les tâches et projets pour avoir des statistiques précises
-      const [tasksResult, projectsResult] = await Promise.all([
+      // Charger toutes les tâches, projets et personnes pour avoir des statistiques précises
+      const [tasksResult, projectsResult, personsResult] = await Promise.all([
         taskService.getAllTasks(0, 10000), // Augmenter la limite pour charger toutes les tâches
         projectService.getAllProjects(0, 10000), // Augmenter la limite pour charger tous les projets
+        personService.getAllPersons(0, 10000), // Augmenter la limite pour charger toutes les personnes
       ]);
 
-      if (tasksResult.success && projectsResult.success) {
+      if (tasksResult.success && projectsResult.success && personsResult.success) {
         const tasks = tasksResult.data.content || [];
 
         // Statuts considérés comme "ouverts"
@@ -43,6 +46,7 @@ const Dashboard = () => {
         setStats({
           totalTasks: tasksResult.data.totalElements || 0,
           totalProjects: projectsResult.data.totalElements || 0,
+          totalPersons: personsResult.data.totalElements || 0,
           openTasks,
           completedTasks,
         });
@@ -77,6 +81,10 @@ const Dashboard = () => {
     navigate('/tasks?status=done');
   };
 
+  const handleViewPersons = () => {
+    navigate('/persons');
+  };
+
   if (loading) return <Loading message="Chargement du tableau de bord..." />;
   if (error) return <ErrorMessage message={error} onRetry={loadDashboardData} />;
 
@@ -101,6 +109,14 @@ const Dashboard = () => {
           <div className="stat-content">
             <h3>Total Tâches</h3>
             <p className="stat-number">{stats.totalTasks}</p>
+          </div>
+        </div>
+
+        <div className="stat-card stat-purple clickable" onClick={handleViewPersons}>
+          <div className="stat-icon">👥</div>
+          <div className="stat-content">
+            <h3>Total Personnes</h3>
+            <p className="stat-number">{stats.totalPersons}</p>
           </div>
         </div>
 

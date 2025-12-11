@@ -7,6 +7,7 @@ import Navbar from './components/Layout/Navbar';
 import Dashboard from './pages/Dashboard';
 import TasksPage from './pages/TasksPage';
 import ProjectsPage from './pages/ProjectsPage';
+import PersonsPage from './pages/PersonsPage';
 import './App.css';
 
 /**
@@ -70,6 +71,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/persons" element={<PersonsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
