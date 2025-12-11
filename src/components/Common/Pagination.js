@@ -1,8 +1,18 @@
 import React from 'react';
-import './Pagination.css';
+import {
+  Box,
+  Pagination as MuiPagination,
+  Typography,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
 
 /**
- * Composant de pagination réutilisable
+ * Composant de pagination réutilisable - Style Material UI 2025
  */
 const Pagination = ({
   currentPage,
@@ -10,145 +20,96 @@ const Pagination = ({
   totalElements = 0,
   pageSize = 10,
   onPageChange,
-  onPageSizeChange
+  onPageSizeChange,
 }) => {
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxPagesToShow = 5;
-    const delta = 2; // Nombre de pages à afficher de chaque côté de la page courante
-
-    if (totalPages <= maxPagesToShow + 2) {
-      // Si peu de pages, afficher toutes
-      for (let i = 0; i < totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Toujours afficher la première page
-      pages.push(0);
-
-      // Calculer la plage autour de la page courante
-      let startPage = Math.max(1, currentPage - delta);
-      let endPage = Math.min(totalPages - 2, currentPage + delta);
-
-      // Ajouter ellipse gauche si nécessaire
-      if (startPage > 1) {
-        pages.push('ellipsis-left');
-      }
-
-      // Pages du milieu
-      for (let i = startPage; i <= endPage; i++) {
-        pages.push(i);
-      }
-
-      // Ajouter ellipse droite si nécessaire
-      if (endPage < totalPages - 2) {
-        pages.push('ellipsis-right');
-      }
-
-      // Toujours afficher la dernière page
-      pages.push(totalPages - 1);
-    }
-
-    return pages;
-  };
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   if (totalPages <= 1 && !onPageSizeChange) return null;
 
-  const pageNumbers = getPageNumbers();
-  // Gérer les valeurs par défaut pour éviter NaN
   const safeCurrentPage = currentPage ?? 0;
   const safePageSize = pageSize ?? 10;
   const safeTotalElements = totalElements ?? 0;
 
   const startItem = safeTotalElements > 0 ? safeCurrentPage * safePageSize + 1 : 0;
-  const endItem = safeTotalElements > 0 ? Math.min((safeCurrentPage + 1) * safePageSize, safeTotalElements) : 0;
+  const endItem =
+    safeTotalElements > 0
+      ? Math.min((safeCurrentPage + 1) * safePageSize, safeTotalElements)
+      : 0;
+
+  const handlePageChange = (event, value) => {
+    onPageChange(value - 1); // MUI Pagination uses 1-based indexing
+  };
 
   return (
-    <div className="pagination-container">
-      {totalElements > 0 && (
-        <div className="pagination-info">
-          <span>
-            Affichage {startItem} - {endItem} sur {totalElements}
-          </span>
-          {onPageSizeChange && (
-            <div className="pagination-size-selector">
-              <label htmlFor="pageSize">Éléments par page:</label>
-              <select
-                id="pageSize"
-                value={pageSize}
-                onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                className="pagination-size-select"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-          )}
-        </div>
-      )}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        alignItems: { xs: 'stretch', sm: 'center' },
+        justifyContent: 'space-between',
+        gap: 2,
+        py: 2,
+        px: { xs: 1, sm: 0 },
+      }}
+    >
+      {/* Info et sélecteur de taille */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 2,
+        }}
+      >
+        {totalElements > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+            Affichage {startItem} - {endItem} sur {safeTotalElements}
+          </Typography>
+        )}
 
+        {onPageSizeChange && (
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel id="page-size-label">Par page</InputLabel>
+            <Select
+              labelId="page-size-label"
+              id="pageSize"
+              value={pageSize}
+              label="Par page"
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            >
+              <MenuItem value={5}>5</MenuItem>
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={20}>20</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+              <MenuItem value={100}>100</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+      </Box>
+
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="pagination">
-          <button
-            className="pagination-btn pagination-btn-first"
-            onClick={() => onPageChange(0)}
-            disabled={currentPage === 0}
-            title="Première page"
-          >
-            ⟨⟨
-          </button>
-
-          <button
-            className="pagination-btn"
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 0}
-          >
-            ← Précédent
-          </button>
-
-          <div className="pagination-numbers">
-            {pageNumbers.map((page, index) => {
-              if (typeof page === 'string') {
-                return (
-                  <span key={page} className="pagination-ellipsis">
-                    ...
-                  </span>
-                );
-              }
-              return (
-                <button
-                  key={page}
-                  className={`pagination-number ${page === currentPage ? 'active' : ''}`}
-                  onClick={() => onPageChange(page)}
-                >
-                  {page + 1}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            className="pagination-btn"
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages - 1}
-          >
-            Suivant →
-          </button>
-
-          <button
-            className="pagination-btn pagination-btn-last"
-            onClick={() => onPageChange(totalPages - 1)}
-            disabled={currentPage === totalPages - 1}
-            title="Dernière page"
-          >
-            ⟩⟩
-          </button>
-        </div>
+        <MuiPagination
+          count={totalPages}
+          page={safeCurrentPage + 1} // MUI Pagination uses 1-based indexing
+          onChange={handlePageChange}
+          color="primary"
+          size={isMobile ? 'small' : 'medium'}
+          showFirstButton
+          showLastButton
+          sx={{
+            '& .MuiPaginationItem-root': {
+              borderRadius: 2,
+              fontWeight: 500,
+            },
+            '& .MuiPaginationItem-root.Mui-selected': {
+              fontWeight: 600,
+            },
+          }}
+        />
       )}
-    </div>
+    </Box>
   );
 };
 

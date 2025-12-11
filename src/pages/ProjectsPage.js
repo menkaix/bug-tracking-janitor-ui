@@ -1,15 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Container,
+  Typography,
+  Box,
+  Button,
+  TextField,
+  Grid,
+  Card,
+  CardContent,
+  CardActions,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Stack,
+  Chip,
+  alpha,
+  useTheme,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Search as SearchIcon,
+  FolderSpecial as FolderIcon,
+  Assignment as AssignmentIcon,
+  Close as CloseIcon,
+  Visibility as VisibilityIcon,
+} from '@mui/icons-material';
 import projectService from '../services/project.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
-import './ProjectsPage.css';
 
 /**
- * Page de gestion des projets
+ * Page de gestion des projets - Material UI 2025
  */
 const ProjectsPage = () => {
+  const theme = useTheme();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [pagination, setPagination] = useState({
@@ -137,65 +167,184 @@ const ProjectsPage = () => {
   if (loading && projects.length === 0) return <Loading message="Chargement des projets..." />;
 
   return (
-    <div className="projects-page">
-      <div className="page-header">
-        <div>
-          <h1>Gestion des Projets</h1>
-          <p>{pagination.totalElements} projet(s) au total</p>
-        </div>
-        <button onClick={handleCreateProject} className="btn-primary">
-          + Nouveau Projet
-        </button>
-      </div>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* En-tête */}
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Gestion des Projets
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {pagination.totalElements} projet(s) au total
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleCreateProject}
+          size="medium"
+          sx={{
+            borderRadius: 2,
+            px: 2,
+            py: 1,
+            fontWeight: 500,
+          }}
+        >
+          Nouveau Projet
+        </Button>
+      </Box>
 
-      <div className="filters-bar">
-        <input
-          type="text"
+      {/* Barre de recherche */}
+      <Box sx={{ mb: 4 }}>
+        <TextField
+          fullWidth
           placeholder="Rechercher un projet..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
+          InputProps={{
+            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+          }}
+          sx={{
+            maxWidth: 600,
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 3,
+            },
+          }}
         />
-      </div>
+      </Box>
 
       {error && <ErrorMessage message={error} onRetry={() => loadProjects(pagination.currentPage)} />}
 
-      <div className="projects-grid">
+      {/* Grille des projets */}
+      {/* Grille des projets */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         {projects.map((project) => (
-          <div key={project.id} className="project-card">
-            <div className="project-header">
-              <div className="project-code">{project.projectCode}</div>
-              <div className="project-actions">
-                <button onClick={() => handleEditProject(project)} className="btn-icon" title="Éditer">
-                  ✏️
-                </button>
-                <button onClick={() => handleDeleteProject(project.id)} className="btn-icon" title="Supprimer">
-                  🗑️
-                </button>
-              </div>
-            </div>
-            <h3 className="project-name">{project.projectName}</h3>
-            <p className="project-description">
-              {project.description || 'Aucune description'}
-            </p>
-            <button
-              onClick={() => handleViewTasks(project.projectCode)}
-              className="btn-view-tasks"
-              title="Voir les tâches de ce projet"
+          <Grid item xs={12} sm={6} md={4} key={project.id}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: 3,
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-8px)',
+                  boxShadow: 6,
+                },
+              }}
             >
-              Voir les tâches
-            </button>
-          </div>
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                  <Chip
+                    icon={<FolderIcon />}
+                    label={project.projectCode}
+                    color="primary"
+                    sx={{
+                      fontWeight: 700,
+                      borderRadius: 2,
+                    }}
+                  />
+                  <Stack direction="row" spacing={0.5}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleEditProject(project)}
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                          color: 'primary.main',
+                        },
+                      }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDeleteProject(project.id)}
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.error.main, 0.1),
+                          color: 'error.main',
+                        },
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                </Stack>
+
+                <Typography variant="h6" fontWeight={700} gutterBottom>
+                  {project.projectName}
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    minHeight: '4.5em', // 3 lignes
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    mb: 2,
+                  }}
+                >
+                  {project.description || 'Aucune description pour ce projet.'}
+                </Typography>
+                
+                <Stack direction="row" spacing={1} sx={{ mt: 'auto' }}>
+                  <Chip
+                    label={project.status || 'Actif'}
+                    size="small"
+                    color={project.status === 'COMPLETED' ? 'success' : 'primary'}
+                  />
+                </Stack>
+              </CardContent>
+
+              <CardActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<VisibilityIcon />}
+                  onClick={() => handleViewTasks(project.projectCode)}
+                  sx={{
+                    borderRadius: 2,
+                    fontWeight: 600,
+                  }}
+                >
+                  Voir les tâches
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
         ))}
-      </div>
+      </Grid>
 
       {projects.length === 0 && !loading && (
-        <div className="empty-state">
-          <p>Aucun projet trouvé</p>
-          <button onClick={handleCreateProject} className="btn-primary">
+        <Box
+          sx={{
+            textAlign: 'center',
+            py: 12,
+            px: 3,
+          }}
+        >
+          <FolderIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 3 }} />
+          <Typography variant="h5" color="text.secondary" gutterBottom>
+            Aucun projet trouvé
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+            Commencez par créer votre premier projet
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleCreateProject}
+            size="large"
+            sx={{ borderRadius: 3, px: 4 }}
+          >
             Créer votre premier projet
-          </button>
-        </div>
+          </Button>
+        </Box>
       )}
 
       <Pagination
@@ -207,67 +356,88 @@ const ProjectsPage = () => {
         onPageSizeChange={handlePageSizeChange}
       />
 
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingProject ? 'Modifier le projet' : 'Nouveau projet'}</h2>
-              <button onClick={() => setShowModal(false)} className="btn-close">
-                ×
-              </button>
-            </div>
+      {/* Modal de création/édition */}
+      <Dialog
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h5" fontWeight={700}>
+              {editingProject ? 'Modifier le projet' : 'Nouveau projet'}
+            </Typography>
+            <IconButton onClick={() => setShowModal(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-            <form onSubmit={handleSubmit} className="project-form">
-              <div className="form-group">
-                <label>Nom du projet *</label>
-                <input
-                  type="text"
-                  value={formData.projectName}
-                  onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
-                  placeholder="Ex: Système d'authentification"
-                  required
-                />
-              </div>
+        <form onSubmit={handleSubmit}>
+          <DialogContent dividers sx={{ py: 3 }}>
+            <Stack spacing={3}>
+              <TextField
+                fullWidth
+                label="Nom du projet"
+                value={formData.projectName}
+                onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
+                placeholder="Ex: Système d'authentification"
+                required
+                InputProps={{
+                  startAdornment: <FolderIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
 
-              <div className="form-group">
-                <label>Code du projet *</label>
-                <input
-                  type="text"
+              <Box>
+                <TextField
+                  fullWidth
+                  label="Code du projet"
                   value={formData.projectCode}
                   onChange={(e) => setFormData({ ...formData, projectCode: e.target.value })}
                   placeholder="Ex: AUTH"
                   required
                   disabled={!!editingProject}
+                  InputProps={{
+                    startAdornment: <AssignmentIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                  }}
                 />
                 {editingProject && (
-                  <small className="form-hint">Le code du projet ne peut pas être modifié</small>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    Le code du projet ne peut pas être modifié
+                  </Typography>
                 )}
-              </div>
+              </Box>
 
-              <div className="form-group">
-                <label>Description *</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows="5"
-                  placeholder="Décrivez votre projet..."
-                  required
-                />
-              </div>
+              <TextField
+                fullWidth
+                label="Description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                multiline
+                rows={5}
+                placeholder="Décrivez votre projet..."
+                required
+              />
+            </Stack>
+          </DialogContent>
 
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-cancel">
-                  Annuler
-                </button>
-                <button type="submit" className="btn-submit">
-                  {editingProject ? 'Mettre à jour' : 'Créer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setShowModal(false)} variant="outlined" size="large">
+              Annuler
+            </Button>
+            <Button type="submit" variant="contained" size="large" startIcon={editingProject ? <EditIcon /> : <AddIcon />}>
+              {editingProject ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+    </Container>
   );
 };
 

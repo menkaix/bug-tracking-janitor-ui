@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { Box, CircularProgress, Typography } from '@mui/material';
 import { apiService } from './services/api.service';
 import logger from './services/logger.service';
 import ApiKeyLogin from './components/ApiKeyLogin';
@@ -8,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import TasksPage from './pages/TasksPage';
 import ProjectsPage from './pages/ProjectsPage';
 import PersonsPage from './pages/PersonsPage';
+import theme from './theme/theme';
 import './App.css';
 
 /**
@@ -51,32 +55,62 @@ function App() {
 
   if (loading) {
     return (
-      <div className="app-loading">
-        <div className="spinner"></div>
-        <p>Chargement...</p>
-      </div>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100vh',
+            backgroundColor: 'background.default',
+          }}
+        >
+          <CircularProgress size={60} thickness={4} />
+          <Typography variant="h6" sx={{ mt: 3, color: 'text.secondary' }}>
+            Chargement...
+          </Typography>
+        </Box>
+      </ThemeProvider>
     );
   }
 
   if (!isAuthenticated) {
-    return <ApiKeyLogin onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ApiKeyLogin onLoginSuccess={handleLoginSuccess} />
+      </ThemeProvider>
+    );
   }
 
   return (
-    <Router>
-      <div className="app">
-        <Navbar onLogout={handleLogout} />
-        <main className="app-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/persons" element={<PersonsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-      </div>
-    </Router>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <Navbar onLogout={handleLogout} />
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              backgroundColor: 'background.default',
+              pt: 3,
+              pb: 4,
+            }}
+          >
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/persons" element={<PersonsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Box>
+        </Box>
+      </Router>
+    </ThemeProvider>
   );
 }
 
