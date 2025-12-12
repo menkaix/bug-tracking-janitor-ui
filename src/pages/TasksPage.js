@@ -126,8 +126,12 @@ const TasksPage = () => {
       if (statusFilter.length > 0) {
         console.log('Filtrage avec statuts:', statusFilter);
 
+        // Séparer les filtres de statut réels et le filtre "no-status"
+        const hasNoStatus = statusFilter.includes('no-status');
+        const realStatuses = statusFilter.filter(s => s !== 'no-status');
+
         // Faire une requête pour chaque statut sélectionné (sans le filtre de projet dans la requête)
-        const promises = statusFilter.map(status => {
+        const promises = realStatuses.map(status => {
           const filter = `status:${status}`;
           console.log('Requête avec filtre:', filter);
           return taskService.getAllTasks(0, 1000, searchTerm, filter);
@@ -145,17 +149,33 @@ const TasksPage = () => {
         }
 
         // Combiner tous les résultats et dédupliquer par ID
-        const allTasks = results.flatMap(r => r.data.content || []);
+        let allTasks = results.flatMap(r => r.data.content || []);
         console.log('Tâches combinées:', allTasks.length);
+
+        // Si "no-status" est sélectionné, récupérer toutes les tâches et filtrer celles sans statut
+        if (hasNoStatus) {
+          const allTasksResult = await taskService.getAllTasks(0, 1000, searchTerm, '');
+          if (allTasksResult.success) {
+            const noStatusTasks = (allTasksResult.data.content || []).filter(task => !task.status || task.status === '');
+            console.log('Tâches sans statut:', noStatusTasks.length);
+            allTasks = [...allTasks, ...noStatusTasks];
+          }
+        }
+
         const uniqueTasks = Array.from(
           new Map(allTasks.map(task => [task.id, task])).values()
         );
         console.log('Tâches uniques:', uniqueTasks.length);
 
         // Filtrer par projet côté client
-        const filteredTasks = projectFilter
-          ? uniqueTasks.filter(task => task.projectCode === projectFilter)
-          : uniqueTasks;
+        let filteredTasks = uniqueTasks;
+        if (projectFilter) {
+          if (projectFilter === 'no-project') {
+            filteredTasks = uniqueTasks.filter(task => !task.projectCode || task.projectCode === '');
+          } else {
+            filteredTasks = uniqueTasks.filter(task => task.projectCode === projectFilter);
+          }
+        }
         console.log('Tâches après filtre projet:', filteredTasks.length);
 
         // Pagination côté client
@@ -173,34 +193,63 @@ const TasksPage = () => {
           size: pageSize,
         });
       } else {
-        // Aucun filtre de statut, requête normale avec filtre de projet si présent
-        const filter = projectFilter ? `projectCode:${projectFilter}` : '';
-        const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
+        // Aucun filtre de statut
+        if (projectFilter === 'no-project') {
+          // Cas spécial: récupérer toutes les tâches et filtrer celles sans projet côté client
+          const result = await taskService.getAllTasks(0, 1000, searchTerm, '');
 
-        if (result.success) {
-          setTasks(result.data.content || []);
+          if (result.success) {
+            const allTasks = result.data.content || [];
+            const noProjectTasks = allTasks.filter(task => !task.projectCode || task.projectCode === '');
+            console.log('Tâches sans projet:', noProjectTasks.length);
 
-          const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
-          const apiTotalPages = result.data.totalPages ?? 0;
-          const apiTotalElements = result.data.totalElements ?? 0;
-          const apiPageSize = result.data.size ?? pageSize;
+            // Pagination côté client
+            const totalElements = noProjectTasks.length;
+            const totalPages = Math.ceil(totalElements / pageSize);
+            const startIndex = page * pageSize;
+            const endIndex = startIndex + pageSize;
+            const paginatedTasks = noProjectTasks.slice(startIndex, endIndex);
 
-          console.log('Pagination data from API:', {
-            apiCurrentPage,
-            apiTotalPages,
-            apiTotalElements,
-            apiPageSize,
-            rawData: result.data
-          });
-
-          setPagination({
-            currentPage: apiCurrentPage,
-            totalPages: apiTotalPages,
-            totalElements: apiTotalElements,
-            size: apiPageSize,
-          });
+            setTasks(paginatedTasks);
+            setPagination({
+              currentPage: page,
+              totalPages: totalPages,
+              totalElements: totalElements,
+              size: pageSize,
+            });
+          } else {
+            setError(result.error || 'Impossible de charger les tâches');
+          }
         } else {
-          setError(result.error || 'Impossible de charger les tâches');
+          // Requête normale avec filtre de projet si présent
+          const filter = projectFilter ? `projectCode:${projectFilter}` : '';
+          const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
+
+          if (result.success) {
+            setTasks(result.data.content || []);
+
+            const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
+            const apiTotalPages = result.data.totalPages ?? 0;
+            const apiTotalElements = result.data.totalElements ?? 0;
+            const apiPageSize = result.data.size ?? pageSize;
+
+            console.log('Pagination data from API:', {
+              apiCurrentPage,
+              apiTotalPages,
+              apiTotalElements,
+              apiPageSize,
+              rawData: result.data
+            });
+
+            setPagination({
+              currentPage: apiCurrentPage,
+              totalPages: apiTotalPages,
+              totalElements: apiTotalElements,
+              size: apiPageSize,
+            });
+          } else {
+            setError(result.error || 'Impossible de charger les tâches');
+          }
         }
       }
     } catch (err) {
@@ -370,6 +419,12 @@ const TasksPage = () => {
       label: 'Terminé',
       color: 'success',
       icon: <CheckCircleIcon fontSize="small" />
+    },
+    {
+      value: 'no-status',
+      label: 'Sans statut',
+      color: 'default',
+      icon: <CancelIcon fontSize="small" />
     },
   ];
 
@@ -577,24 +632,58 @@ const TasksPage = () => {
         </Button>
       </Box>
 
-      {/* Barre de filtres */}
-      <Paper sx={{ p: 3, mb: 4, borderRadius: 3, boxShadow: 2 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={4}>
+      {/* Barre de filtres et recherche */}
+      <Paper
+        sx={{
+          p: 3,
+          mb: 4,
+          borderRadius: 3,
+          boxShadow: 2,
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.02)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
+        }}
+      >
+        <Stack spacing={2.5}>
+          {/* Ligne 1: Recherche */}
+          <Box>
             <TextField
               fullWidth
-              placeholder="Rechercher..."
+              placeholder="Rechercher une tâche par titre, description ou référence..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
-                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                startAdornment: (
+                  <SearchIcon sx={{ mr: 1.5, color: 'text.secondary', fontSize: 24 }} />
+                ),
+                endAdornment: searchTerm && (
+                  <IconButton
+                    size="small"
+                    onClick={() => setSearchTerm('')}
+                    sx={{ mr: -1 }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                ),
               }}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2.5,
+                  backgroundColor: 'background.paper',
+                  '&:hover': {
+                    backgroundColor: 'background.paper',
+                    boxShadow: 1,
+                  },
+                  '&.Mui-focused': {
+                    backgroundColor: 'background.paper',
+                    boxShadow: 2,
+                  },
+                }
+              }}
             />
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
+          {/* Ligne 2: Filtres */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
+            <FormControl sx={{ flex: { xs: '1 1 100%', sm: '1 1 50%' } }}>
               <InputLabel>Projet</InputLabel>
               <Select
                 value={projectFilter}
@@ -604,74 +693,202 @@ const TasksPage = () => {
                   updateURLWithFilters(statusFilter, newProjectCode);
                 }}
                 label="Projet"
-                sx={{ borderRadius: 2 }}
+                sx={{
+                  borderRadius: 2,
+                  backgroundColor: 'background.paper',
+                  '&:hover': {
+                    boxShadow: 1,
+                  },
+                }}
               >
-                <MenuItem value="">Tous les projets</MenuItem>
+                <MenuItem value="">
+                  <Typography variant="body2" color="text.secondary">
+                    Tous les projets
+                  </Typography>
+                </MenuItem>
+                <MenuItem value="no-project">
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CancelIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      Sans projet
+                    </Typography>
+                  </Stack>
+                </MenuItem>
                 {projects.map((project) => (
                   <MenuItem key={project.id} value={project.projectCode}>
-                    {project.projectName} ({project.projectCode})
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip
+                        label={project.projectCode}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        sx={{ fontWeight: 600 }}
+                      />
+                      <Typography variant="body2">{project.projectName}</Typography>
+                    </Stack>
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
 
-          <Grid item xs={12} md={4}>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<FilterListIcon />}
-              onClick={(e) => setStatusFilterAnchorEl(e.currentTarget)}
-              sx={{
-                height: 56,
-                borderRadius: 2,
-                justifyContent: 'flex-start',
-                textAlign: 'left',
-              }}
-            >
-              {statusFilter.length === 0
-                ? 'Tous les statuts'
-                : statusFilter.length === 1
-                ? statusOptions.find(opt => opt.value === statusFilter[0])?.label
-                : `${statusFilter.length} statuts sélectionnés`}
-            </Button>
-            <Menu
-              anchorEl={statusFilterAnchorEl}
-              open={Boolean(statusFilterAnchorEl)}
-              onClose={() => setStatusFilterAnchorEl(null)}
-              PaperProps={{
-                sx: {
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 50%' } }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<FilterListIcon />}
+                endIcon={
+                  statusFilter.length > 0 && (
+                    <Chip
+                      label={statusFilter.length}
+                      size="small"
+                      color="primary"
+                      sx={{
+                        height: 20,
+                        minWidth: 20,
+                        '& .MuiChip-label': { px: 0.75 }
+                      }}
+                    />
+                  )
+                }
+                onClick={(e) => setStatusFilterAnchorEl(e.currentTarget)}
+                sx={{
+                  height: 56,
                   borderRadius: 2,
-                  minWidth: 250,
-                  mt: 1,
-                },
-              }}
-            >
-              <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Filtrer par statut
-                </Typography>
-                {statusFilter.length > 0 && (
-                  <Button size="small" onClick={clearStatusFilter}>
-                    Effacer
-                  </Button>
-                )}
-              </Box>
-              {statusOptions.map((option) => (
-                <MenuItem key={option.value} onClick={() => toggleStatusFilter(option.value)}>
-                  <Checkbox checked={statusFilter.includes(option.value)} />
+                  justifyContent: 'space-between',
+                  px: 2,
+                  backgroundColor: 'background.paper',
+                  borderColor: statusFilter.length > 0 ? 'primary.main' : 'divider',
+                  borderWidth: statusFilter.length > 0 ? 2 : 1,
+                  fontWeight: statusFilter.length > 0 ? 600 : 400,
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                    borderWidth: statusFilter.length > 0 ? 2 : 1,
+                    boxShadow: 1,
+                  },
+                }}
+              >
+                <Box component="span" sx={{ flex: 1, textAlign: 'left' }}>
+                  {statusFilter.length === 0
+                    ? 'Filtrer par statut'
+                    : statusFilter.length === 1
+                    ? statusOptions.find(opt => opt.value === statusFilter[0])?.label
+                    : `${statusFilter.length} statuts sélectionnés`}
+                </Box>
+              </Button>
+              <Menu
+                anchorEl={statusFilterAnchorEl}
+                open={Boolean(statusFilterAnchorEl)}
+                onClose={() => setStatusFilterAnchorEl(null)}
+                PaperProps={{
+                  sx: {
+                    borderRadius: 2,
+                    minWidth: 280,
+                    mt: 1,
+                    boxShadow: 4,
+                  },
+                }}
+              >
+                <Box sx={{
+                  px: 2,
+                  py: 1.5,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                }}>
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Filtrer par statut
+                  </Typography>
+                  {statusFilter.length > 0 && (
+                    <Button
+                      size="small"
+                      onClick={clearStatusFilter}
+                      sx={{ minWidth: 'auto' }}
+                    >
+                      Effacer
+                    </Button>
+                  )}
+                </Box>
+                {statusOptions.map((option) => (
+                  <MenuItem
+                    key={option.value}
+                    onClick={() => toggleStatusFilter(option.value)}
+                    sx={{
+                      py: 1.5,
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                      },
+                    }}
+                  >
+                    <Checkbox
+                      checked={statusFilter.includes(option.value)}
+                      sx={{ mr: 1 }}
+                    />
+                    <Chip
+                      icon={option.icon}
+                      label={option.label}
+                      color={option.color}
+                      size="small"
+                      sx={{ fontWeight: 500 }}
+                    />
+                  </MenuItem>
+                ))}
+              </Menu>
+            </Box>
+          </Stack>
+
+          {/* Indicateurs de filtres actifs */}
+          {(searchTerm || projectFilter || statusFilter.length > 0) && (
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                Filtres actifs :
+              </Typography>
+              {searchTerm && (
+                <Chip
+                  label={`Recherche: "${searchTerm}"`}
+                  size="small"
+                  onDelete={() => setSearchTerm('')}
+                  color="primary"
+                  variant="outlined"
+                  icon={<SearchIcon />}
+                />
+              )}
+              {projectFilter && (
+                <Chip
+                  label={
+                    projectFilter === 'no-project'
+                      ? 'Projet: Sans projet'
+                      : `Projet: ${projects.find(p => p.projectCode === projectFilter)?.projectCode || projectFilter}`
+                  }
+                  size="small"
+                  onDelete={() => {
+                    setProjectFilter('');
+                    updateURLWithFilters(statusFilter, '');
+                  }}
+                  color="primary"
+                  variant="outlined"
+                  icon={projectFilter === 'no-project' ? <CancelIcon /> : undefined}
+                />
+              )}
+              {statusFilter.map(status => {
+                const statusInfo = getStatusInfo(status);
+                return (
                   <Chip
-                    icon={option.icon}
-                    label={option.label}
-                    color={option.color}
+                    key={status}
+                    label={statusInfo.label}
                     size="small"
-                    sx={{ ml: 1 }}
+                    icon={statusInfo.icon}
+                    onDelete={() => toggleStatusFilter(status)}
+                    color={statusInfo.color}
+                    variant="outlined"
                   />
-                </MenuItem>
-              ))}
-            </Menu>
-          </Grid>
-        </Grid>
+                );
+              })}
+            </Stack>
+          )}
+        </Stack>
       </Paper>
 
       {error && <ErrorMessage message={error} onRetry={() => loadTasks(pagination.currentPage)} />}
@@ -930,7 +1147,8 @@ const TasksPage = () => {
         <form onSubmit={handleSubmit}>
           <DialogContent dividers sx={{ py: 3 }}>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={8}>
+              {/* Ligne 1: Titre, Statut, Projet */}
+              <Grid item xs={12} md={5}>
                 <TextField
                   fullWidth
                   label="Titre"
@@ -943,7 +1161,7 @@ const TasksPage = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={4}>
+              <Grid item xs={6} md={3}>
                 <FormControl fullWidth>
                   <InputLabel>Statut</InputLabel>
                   <Select
@@ -976,19 +1194,7 @@ const TasksPage = () => {
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  multiline
-                  rows={4}
-                  required
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
+              <Grid item xs={6} md={4}>
                 <FormControl fullWidth>
                   <InputLabel>Projet</InputLabel>
                   <Select
@@ -1006,7 +1212,30 @@ const TasksPage = () => {
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              {/* Ligne 2: Description seule - PLEINE LARGEUR */}
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  multiline
+                  rows={8}
+                  required
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      alignItems: 'flex-start',
+                    },
+                    '& .MuiInputBase-input': {
+                      minHeight: '160px',
+                    },
+                  }}
+                  placeholder="Décrivez la tâche en détail..."
+                />
+              </Grid>
+
+              {/* Ligne 3: Estimation et Dates - EN DESSOUS DE LA DESCRIPTION */}
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   label="Estimation"
@@ -1016,7 +1245,7 @@ const TasksPage = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid item xs={6} md={4}>
                 <TextField
                   fullWidth
                   type="date"
@@ -1030,7 +1259,7 @@ const TasksPage = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid item xs={6} md={4}>
                 <TextField
                   fullWidth
                   type="date"
@@ -1044,6 +1273,7 @@ const TasksPage = () => {
                 />
               </Grid>
 
+              {/* Ligne 4: Référence de suivi */}
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -1054,6 +1284,7 @@ const TasksPage = () => {
                 />
               </Grid>
 
+              {/* Ligne 5: Assignés */}
               <Grid item xs={12}>
                 <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                   Assignés
