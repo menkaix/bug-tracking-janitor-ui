@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   TextField,
-  Grid,
   Card,
   CardContent,
   CardActions,
@@ -31,9 +30,11 @@ import {
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import projectService from '../services/project.service';
+import taskService from '../services/task.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
+import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
 
 /**
  * Page de gestion des projets - Material UI 2025
@@ -42,6 +43,7 @@ const ProjectsPage = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [pagination, setPagination] = useState({
     currentPage: 0,
     totalPages: 0,
@@ -64,18 +66,25 @@ const ProjectsPage = () => {
     setError('');
 
     try {
-      const result = await projectService.getAllProjects(page, pagination.size, searchTerm);
+      const [projectsResult, tasksResult] = await Promise.all([
+        projectService.getAllProjects(page, pagination.size, searchTerm),
+        taskService.getAllTasks(0, 10000),
+      ]);
 
-      if (result.success) {
-        setProjects(result.data.content || []);
+      if (projectsResult.success) {
+        setProjects(projectsResult.data.content || []);
         setPagination({
-          currentPage: result.data.currentPage,
-          totalPages: result.data.totalPages,
-          totalElements: result.data.totalElements,
-          size: result.data.size,
+          currentPage: projectsResult.data.currentPage,
+          totalPages: projectsResult.data.totalPages,
+          totalElements: projectsResult.data.totalElements,
+          size: projectsResult.data.size,
         });
       } else {
-        setError(result.error || 'Impossible de charger les projets');
+        setError(projectsResult.error || 'Impossible de charger les projets');
+      }
+
+      if (tasksResult.success) {
+        setTasks(tasksResult.data.content || []);
       }
     } catch (err) {
       setError('Une erreur est survenue lors du chargement des projets');
@@ -164,6 +173,12 @@ const ProjectsPage = () => {
     navigate(`/tasks?projectCode=${projectCode}`);
   };
 
+  // Fonction pour obtenir le statut calculé d'un projet
+  const getCalculatedStatus = (projectCode) => {
+    const projectTasks = tasks.filter(t => t.projectCode === projectCode);
+    return calculateProjectStatus(projectTasks);
+  };
+
   if (loading && projects.length === 0) return <Loading message="Chargement des projets..." />;
 
   return (
@@ -216,24 +231,34 @@ const ProjectsPage = () => {
       {error && <ErrorMessage message={error} onRetry={() => loadProjects(pagination.currentPage)} />}
 
       {/* Grille des projets */}
-      {/* Grille des projets */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(auto-fill, minmax(350px, 1fr))',
+            md: 'repeat(auto-fill, minmax(380px, 1fr))',
+          },
+          gap: 3,
+          mb: 4,
+        }}
+      >
         {projects.map((project) => (
-          <Grid item xs={12} sm={6} md={4} key={project.id}>
-            <Card
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                borderRadius: 3,
-                transition: 'all 0.3s ease-in-out',
-                '&:hover': {
-                  transform: 'translateY(-8px)',
-                  boxShadow: 6,
-                },
-              }}
-            >
-              <CardContent sx={{ flexGrow: 1 }}>
+          <Card
+            key={project.id}
+            sx={{
+              height: 380, // Hauteur fixe pour toutes les cartes
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: 3,
+              transition: 'all 0.3s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-8px)',
+                boxShadow: 6,
+              },
+            }}
+          >
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 3 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
                   <Chip
                     icon={<FolderIcon />}
@@ -272,7 +297,22 @@ const ProjectsPage = () => {
                   </Stack>
                 </Stack>
 
-                <Typography variant="h6" fontWeight={700} gutterBottom>
+                <Typography
+                  variant="h6"
+                  fontWeight={700}
+                  gutterBottom
+                  sx={{
+                    height: '3.2em', // Hauteur fixe pour max 2 lignes
+                    lineHeight: 1.6,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                  }}
+                >
                   {project.projectName}
                 </Typography>
 
@@ -280,24 +320,33 @@ const ProjectsPage = () => {
                   variant="body2"
                   color="text.secondary"
                   sx={{
-                    minHeight: '4.5em', // 3 lignes
+                    height: '4.5em', // Hauteur fixe pour 3 lignes
+                    lineHeight: 1.5,
                     display: '-webkit-box',
                     WebkitLineClamp: 3,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     mb: 2,
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
                   }}
                 >
                   {project.description || 'Aucune description pour ce projet.'}
                 </Typography>
-                
+
                 <Stack direction="row" spacing={1} sx={{ mt: 'auto' }}>
-                  <Chip
-                    label={project.status || 'Actif'}
-                    size="small"
-                    color={project.status === 'COMPLETED' ? 'success' : 'primary'}
-                  />
+                  {(() => {
+                    const calculatedStatus = getCalculatedStatus(project.projectCode);
+                    const statusInfo = getProjectStatusInfo(calculatedStatus);
+                    return (
+                      <Chip
+                        label={statusInfo.label}
+                        size="small"
+                        color={statusInfo.color}
+                      />
+                    );
+                  })()}
                 </Stack>
               </CardContent>
 
@@ -316,9 +365,8 @@ const ProjectsPage = () => {
                 </Button>
               </CardActions>
             </Card>
-          </Grid>
         ))}
-      </Grid>
+      </Box>
 
       {projects.length === 0 && !loading && (
         <Box

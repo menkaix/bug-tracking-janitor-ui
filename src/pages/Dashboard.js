@@ -38,6 +38,7 @@ import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
+import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
 
 /**
  * Page du tableau de bord - Style Material UI 2025
@@ -110,15 +111,20 @@ const Dashboard = () => {
   const calculateProjectKPIs = (tasks, projects) => {
     const totalProjects = projects.length;
 
-    const activeProjects = projects.filter(p => {
-      const status = p.status ? p.status.toUpperCase() : '';
-      return status === 'ACTIVE' || status === 'IN_PROGRESS' || status === 'IN PROGRESS';
-    }).length;
+    // Calculer le statut de chaque projet basé sur ses tâches
+    const projectsWithCalculatedStatus = projects.map(p => {
+      const projectTasks = tasks.filter(t => t.projectCode === p.projectCode);
+      const calculatedStatus = calculateProjectStatus(projectTasks);
+      return { ...p, calculatedStatus };
+    });
 
-    const completedProjects = projects.filter(p => {
-      const status = p.status ? p.status.toUpperCase() : '';
-      return status === 'COMPLETED' || status === 'DONE';
-    }).length;
+    const activeProjects = projectsWithCalculatedStatus.filter(p =>
+      p.calculatedStatus === 'ACTIVE'
+    ).length;
+
+    const completedProjects = projectsWithCalculatedStatus.filter(p =>
+      p.calculatedStatus === 'COMPLETED'
+    ).length;
 
     const totalTasks = tasks.length;
 
@@ -159,9 +165,9 @@ const Dashboard = () => {
     });
 
     const now = new Date();
-    const projectsWithDelays = projects.filter(p => {
-      const status = p.status ? p.status.toUpperCase() : '';
-      if (status !== 'ACTIVE' && status !== 'IN_PROGRESS' && status !== 'IN PROGRESS') return false;
+    const projectsWithDelays = projectsWithCalculatedStatus.filter(p => {
+      // Seulement les projets actifs peuvent être en retard
+      if (p.calculatedStatus !== 'ACTIVE') return false;
 
       const projectTasks = tasks.filter(t => t.projectCode === p.projectCode);
       return projectTasks.some(t => {
@@ -180,6 +186,8 @@ const Dashboard = () => {
     const projectDetails = projects.map(project => {
       const projectTasks = tasks.filter(t => t.projectCode === project.projectCode);
       const projectTotal = projectTasks.length;
+
+      // Compter les tâches par statut
       const projectCompleted = projectTasks.filter(t => t.status && t.status.toLowerCase() === 'done').length;
       const projectInProgress = projectTasks.filter(t => {
         const status = t.status ? t.status.toLowerCase() : '';
@@ -187,10 +195,22 @@ const Dashboard = () => {
       }).length;
       const projectTodo = projectTasks.filter(t => {
         const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'todo' || status === 'to-do' || status === 'pending';
+        return status === 'todo' || status === 'to-do';
       }).length;
+      const projectPending = projectTasks.filter(t => {
+        const status = t.status ? t.status.toLowerCase() : '';
+        return status === 'pending';
+      }).length;
+      const projectToStudy = projectTasks.filter(t => {
+        const status = t.status ? t.status.toLowerCase() : '';
+        return status === 'to-study';
+      }).length;
+      const projectNoStatus = projectTasks.filter(t => !t.status || t.status.trim() === '').length;
 
       const projectCompletionRate = projectTotal > 0 ? parseFloat(((projectCompleted / projectTotal) * 100).toFixed(1)) : 0;
+
+      // Calculer le statut basé sur les tâches
+      const calculatedStatus = calculateProjectStatus(projectTasks);
 
       const hasDelay = projectTasks.some(t => {
         const taskStatus = t.status ? t.status.toLowerCase() : '';
@@ -215,11 +235,14 @@ const Dashboard = () => {
       return {
         id: project.id,
         name: project.projectName || 'Sans nom',
-        status: project.status || 'UNKNOWN',
+        status: calculatedStatus, // Utiliser le statut calculé
         totalTasks: projectTotal,
         completedTasks: projectCompleted,
         inProgressTasks: projectInProgress,
         todoTasks: projectTodo,
+        pendingTasks: projectPending,
+        toStudyTasks: projectToStudy,
+        noStatusTasks: projectNoStatus,
         completionRate: projectCompletionRate,
         hasDelay,
         assignedPersonsCount: assignedPersonsSet.size,
@@ -402,6 +425,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) return <Loading message="Chargement du tableau de bord..." />;
@@ -608,17 +632,26 @@ const Dashboard = () => {
               <Stack spacing={2}>
                 {projectsData.projectDetails.slice(0, 10).map((project) => (
                   <Card key={project.id} variant="outlined">
-                    <CardContent>
+                    <CardContent sx={{ display: 'flex', flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                        <Box>
-                          <Typography variant="h6" fontWeight={600} gutterBottom>
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                          <Typography
+                            variant="h6"
+                            fontWeight={600}
+                            gutterBottom
+                            sx={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
                             {project.name}
                           </Typography>
-                          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
                             <Chip
-                              label={project.status}
+                              label={getProjectStatusInfo(project.status).label}
                               size="small"
-                              color={project.status === 'COMPLETED' ? 'success' : 'primary'}
+                              color={getProjectStatusInfo(project.status).color}
                             />
                             {project.hasDelay && (
                               <Chip label="En retard" size="small" color="error" />
@@ -630,7 +663,7 @@ const Dashboard = () => {
                             />
                           </Stack>
                         </Box>
-                        <Typography variant="h5" fontWeight={700} color="primary">
+                        <Typography variant="h5" fontWeight={700} color="primary" sx={{ ml: 2, flexShrink: 0 }}>
                           {project.completionRate}%
                         </Typography>
                       </Box>
@@ -643,38 +676,91 @@ const Dashboard = () => {
                         />
                       </Box>
 
-                      <Grid container spacing={2}>
-                        <Grid item xs={3}>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Total
-                          </Typography>
-                          <Typography variant="body1" fontWeight={600}>
-                            {project.totalTasks}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={3}>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Terminées
-                          </Typography>
-                          <Typography variant="body1" fontWeight={600} color="success.main">
-                            {project.completedTasks}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={3}>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            En cours
-                          </Typography>
-                          <Typography variant="body1" fontWeight={600} color="warning.main">
-                            {project.inProgressTasks}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={3}>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            À faire
-                          </Typography>
-                          <Typography variant="body1" fontWeight={600} color="info.main">
-                            {project.todoTasks}
-                          </Typography>
+                      <Grid container spacing={2} sx={{ mt: 'auto' }}>
+                        <Grid item xs={12}>
+                          <Grid container spacing={1.5}>
+                            {/* Total - toujours affiché */}
+                            <Grid item xs={6} sm={4} md={3}>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                Total
+                              </Typography>
+                              <Typography variant="body1" fontWeight={600}>
+                                {project.totalTasks}
+                              </Typography>
+                            </Grid>
+
+                            {/* Terminées - affiché si > 0 */}
+                            {project.completedTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Terminées
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="success.main">
+                                  {project.completedTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
+                            {/* En cours - affiché si > 0 */}
+                            {project.inProgressTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  En cours
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="warning.main">
+                                  {project.inProgressTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
+                            {/* À faire - affiché si > 0 */}
+                            {project.todoTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  À faire
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="info.main">
+                                  {project.todoTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
+                            {/* En attente - affiché si > 0 */}
+                            {project.pendingTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  En attente
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="warning.main">
+                                  {project.pendingTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
+                            {/* À étudier - affiché si > 0 */}
+                            {project.toStudyTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  À étudier
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="secondary.main">
+                                  {project.toStudyTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
+                            {/* Sans statut - affiché si > 0 */}
+                            {project.noStatusTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Sans statut
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="error.main">
+                                  {project.noStatusTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+                          </Grid>
                         </Grid>
                       </Grid>
                     </CardContent>

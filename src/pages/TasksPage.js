@@ -801,36 +801,39 @@ const TasksPage = () => {
                       renderValue={(value) => {
                         const statusInfo = getStatusInfo(value);
                         return (
-                          <Chip
-                            icon={statusInfo.icon}
-                            label={statusInfo.label}
-                            color={statusInfo.color}
-                            size="small"
-                            sx={{ borderRadius: 2 }}
-                          />
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Box sx={{ color: `${statusInfo.color}.main`, display: 'flex', alignItems: 'center' }}>
+                              {statusInfo.icon}
+                            </Box>
+                            <Typography variant="body2" fontWeight={500}>
+                              {statusInfo.label}
+                            </Typography>
+                          </Stack>
                         );
                       }}
                     >
-                      <MenuItem value="">Aucun statut</MenuItem>
+                      <MenuItem value="">
+                        <Typography variant="body2" color="text.secondary">
+                          Aucun statut
+                        </Typography>
+                      </MenuItem>
                       {statusOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
-                          <Chip
-                            icon={option.icon}
-                            label={option.label}
-                            color={option.color}
-                            size="small"
-                            sx={{ borderRadius: 2 }}
-                          />
+                          <Stack direction="row" spacing={1.5} alignItems="center">
+                            <Box sx={{ color: `${option.color}.main`, display: 'flex', alignItems: 'center' }}>
+                              {option.icon}
+                            </Box>
+                            <Typography variant="body2" fontWeight={500}>
+                              {option.label}
+                            </Typography>
+                          </Stack>
                         </MenuItem>
                       ))}
                       {task.status && !statusOptions.find(opt => opt.value === task.status) && (
                         <MenuItem value={task.status}>
-                          <Chip
-                            label={task.status}
-                            color="default"
-                            size="small"
-                            sx={{ borderRadius: 2 }}
-                          />
+                          <Typography variant="body2">
+                            {task.status}
+                          </Typography>
                         </MenuItem>
                       )}
                     </Select>
