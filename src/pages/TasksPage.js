@@ -1146,23 +1146,22 @@ const TasksPage = () => {
 
         <form onSubmit={handleSubmit}>
           <DialogContent dividers sx={{ py: 3 }}>
-            <Grid container spacing={3}>
-              {/* Ligne 1: Titre, Statut, Projet */}
-              <Grid item xs={12} md={5}>
-                <TextField
-                  fullWidth
-                  label="Titre"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
-                  InputProps={{
-                    startAdornment: <AssignmentIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                  }}
-                />
-              </Grid>
+            <Stack spacing={3}>
+              {/* Titre */}
+              <TextField
+                fullWidth
+                label="Titre"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                required
+                InputProps={{
+                  startAdornment: <AssignmentIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
 
-              <Grid item xs={6} md={3}>
-                <FormControl fullWidth>
+              {/* Statut et Projet sur la même ligne */}
+              <Stack direction="row" spacing={2}>
+                <FormControl sx={{ minWidth: 200 }}>
                   <InputLabel>Statut</InputLabel>
                   <Select
                     value={formData.status}
@@ -1192,9 +1191,7 @@ const TasksPage = () => {
                     ))}
                   </Select>
                 </FormControl>
-              </Grid>
 
-              <Grid item xs={6} md={4}>
                 <FormControl fullWidth>
                   <InputLabel>Projet</InputLabel>
                   <Select
@@ -1210,71 +1207,76 @@ const TasksPage = () => {
                     ))}
                   </Select>
                 </FormControl>
-              </Grid>
+              </Stack>
 
-              {/* Ligne 2: Description seule - PLEINE LARGEUR */}
-              <Grid item xs={12}>
+              {/* Description avec support Markdown */}
+              <Box>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={600}>
+                    Description
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    (Markdown supporté)
+                  </Typography>
+                </Stack>
                 <TextField
                   fullWidth
-                  label="Description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   multiline
-                  rows={8}
+                  minRows={12}
+                  maxRows={20}
                   required
+                  placeholder="Décrivez la tâche en détail... Vous pouvez utiliser le Markdown:&#10;&#10;# Titre&#10;## Sous-titre&#10;- Liste à puces&#10;1. Liste numérotée&#10;**gras** *italique* `code`&#10;[lien](https://example.com)"
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       alignItems: 'flex-start',
+                      fontFamily: 'monospace',
+                      fontSize: '0.9rem',
                     },
                     '& .MuiInputBase-input': {
-                      minHeight: '160px',
+                      lineHeight: 1.6,
                     },
                   }}
-                  placeholder="Décrivez la tâche en détail..."
                 />
-              </Grid>
+              </Box>
 
-              {/* Ligne 3: Estimation et Dates - EN DESSOUS DE LA DESCRIPTION */}
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Estimation"
-                  value={formData.estimate}
-                  onChange={(e) => setFormData({ ...formData, estimate: e.target.value })}
-                  placeholder="ex: 3h, 2j"
-                />
-              </Grid>
+              {/* Estimation, Dates et Référence */}
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={2}>
+                  <TextField
+                    label="Estimation"
+                    value={formData.estimate}
+                    onChange={(e) => setFormData({ ...formData, estimate: e.target.value })}
+                    placeholder="ex: 3h, 2j"
+                    sx={{ width: 150 }}
+                  />
 
-              <Grid item xs={6} md={4}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Début prévu"
-                  value={formData.plannedStart}
-                  onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                  }}
-                />
-              </Grid>
+                  <TextField
+                    type="date"
+                    label="Début prévu"
+                    value={formData.plannedStart}
+                    onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                    InputProps={{
+                      startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                    }}
+                    sx={{ flex: 1 }}
+                  />
 
-              <Grid item xs={6} md={4}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Échéance"
-                  value={formData.deadLine}
-                  onChange={(e) => setFormData({ ...formData, deadLine: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                  }}
-                />
-              </Grid>
+                  <TextField
+                    type="date"
+                    label="Échéance"
+                    value={formData.deadLine}
+                    onChange={(e) => setFormData({ ...formData, deadLine: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                    InputProps={{
+                      startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                    }}
+                    sx={{ flex: 1 }}
+                  />
+                </Stack>
 
-              {/* Ligne 4: Référence de suivi */}
-              <Grid item xs={12}>
                 <TextField
                   fullWidth
                   label="Référence de suivi"
@@ -1282,10 +1284,10 @@ const TasksPage = () => {
                   onChange={(e) => setFormData({ ...formData, trackingReference: e.target.value })}
                   placeholder="ex: JIRA-12345"
                 />
-              </Grid>
+              </Stack>
 
-              {/* Ligne 5: Assignés */}
-              <Grid item xs={12}>
+              {/* Assignés */}
+              <Box>
                 <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                   Assignés
                 </Typography>
@@ -1336,8 +1338,8 @@ const TasksPage = () => {
                     </Typography>
                   )}
                 </Stack>
-              </Grid>
-            </Grid>
+              </Box>
+            </Stack>
           </DialogContent>
 
           <DialogActions sx={{ px: 3, py: 2 }}>
