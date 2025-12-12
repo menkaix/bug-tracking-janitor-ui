@@ -1,5 +1,52 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import {
+  Container,
+  Typography,
+  Box,
+  Button,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Chip,
+  IconButton,
+  Grid,
+  Stack,
+  Menu,
+  Checkbox,
+  Tooltip,
+  alpha,
+  useTheme,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Search as SearchIcon,
+  FilterList as FilterListIcon,
+  CalendarToday as CalendarIcon,
+  Assignment as AssignmentIcon,
+  Person as PersonIcon,
+  Close as CloseIcon,
+  CheckCircle as CheckCircleIcon,
+  Schedule as ScheduleIcon,
+  Pending as PendingIcon,
+  Psychology as PsychologyIcon,
+  Cancel as CancelIcon,
+} from '@mui/icons-material';
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
@@ -7,12 +54,12 @@ import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
 import { format } from 'date-fns';
-import './TasksPage.css';
 
 /**
- * Page de gestion des tâches
+ * Page de gestion des tâches - Material UI 2025
  */
 const TasksPage = () => {
+  const theme = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -39,7 +86,7 @@ const TasksPage = () => {
   };
 
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter());
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [statusFilterAnchorEl, setStatusFilterAnchorEl] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -192,20 +239,6 @@ const TasksPage = () => {
     // eslint-disable-next-line
   }, [searchTerm, statusFilter, projectFilter]);
 
-  // Fermer le dropdown quand on clique à l'extérieur
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showStatusDropdown && !event.target.closest('.status-filter-dropdown')) {
-        setShowStatusDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showStatusDropdown]);
-
   const handlePageChange = (page) => {
     // Validation des limites de page
     if (page < 0) {
@@ -308,18 +341,51 @@ const TasksPage = () => {
   };
 
   const statusOptions = [
-    { value: 'todo', label: 'À faire', class: 'status-todo' },
-    { value: 'pending', label: 'En attente', class: 'status-pending' },
-    { value: 'in-progress', label: 'En cours', class: 'status-progress' },
-    { value: 'to-study', label: 'À étudier', class: 'status-study' },
-    { value: 'done', label: 'Terminé', class: 'status-done' },
+    {
+      value: 'todo',
+      label: 'À faire',
+      color: 'secondary',
+      icon: <AssignmentIcon fontSize="small" />
+    },
+    {
+      value: 'pending',
+      label: 'En attente',
+      color: 'warning',
+      icon: <PendingIcon fontSize="small" />
+    },
+    {
+      value: 'in-progress',
+      label: 'En cours',
+      color: 'info',
+      icon: <ScheduleIcon fontSize="small" />
+    },
+    {
+      value: 'to-study',
+      label: 'À étudier',
+      color: 'default',
+      icon: <PsychologyIcon fontSize="small" />
+    },
+    {
+      value: 'done',
+      label: 'Terminé',
+      color: 'success',
+      icon: <CheckCircleIcon fontSize="small" />
+    },
   ];
 
   const getStatusInfo = (status) => {
     if (!status) {
-      return { label: 'Aucun statut', class: 'status-none' };
+      return {
+        label: 'Aucun statut',
+        color: 'default',
+        icon: <CancelIcon fontSize="small" />
+      };
     }
-    return statusOptions.find(opt => opt.value === status) || { label: status, class: 'status-default' };
+    return statusOptions.find(opt => opt.value === status) || {
+      label: status,
+      color: 'default',
+      icon: <AssignmentIcon fontSize="small" />
+    };
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
@@ -484,223 +550,350 @@ const TasksPage = () => {
   if (loading && tasks.length === 0) return <Loading message="Chargement des tâches..." />;
 
   return (
-    <div className="tasks-page">
-      <div className="page-header">
-        <div>
-          <h1>Gestion des Tâches</h1>
-          <p>{pagination.totalElements} tâche(s) au total</p>
-        </div>
-        <button onClick={handleCreateTask} className="btn-primary">
-          + Nouvelle Tâche
-        </button>
-      </div>
-
-      <div className="filters-bar">
-        <input
-          type="text"
-          placeholder="Rechercher..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
-
-        <select
-          value={projectFilter}
-          onChange={(e) => {
-            const newProjectCode = e.target.value;
-            setProjectFilter(newProjectCode);
-            // Mettre à jour l'URL avec tous les filtres
-            updateURLWithFilters(statusFilter, newProjectCode);
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* En-tête */}
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Gestion des Tâches
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {pagination.totalElements} tâche(s) au total
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleCreateTask}
+          size="medium"
+          sx={{
+            borderRadius: 2,
+            px: 2,
+            py: 1,
+            fontWeight: 500,
           }}
-          className="filter-select"
         >
-          <option value="">Tous les projets</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.projectCode}>
-              {project.projectName} ({project.projectCode})
-            </option>
-          ))}
-        </select>
+          Nouvelle Tâche
+        </Button>
+      </Box>
 
-        <div className="status-filter-dropdown">
-          <button
-            className="filter-select-button"
-            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-          >
-            {statusFilter.length === 0
-              ? 'Tous les statuts'
-              : statusFilter.length === 1
-              ? statusOptions.find(opt => opt.value === statusFilter[0])?.label
-              : `${statusFilter.length} statuts sélectionnés`}
-            <span className="dropdown-arrow">{showStatusDropdown ? '▲' : '▼'}</span>
-          </button>
-          {showStatusDropdown && (
-            <div className="status-dropdown-menu">
-              <div className="dropdown-header">
-                <span>Filtrer par statut</span>
-                {statusFilter.length > 0 && (
-                  <button
-                    className="clear-filter-btn"
-                    onClick={clearStatusFilter}
-                  >
-                    Effacer
-                  </button>
-                )}
-              </div>
-              <div className="dropdown-options">
-                {statusOptions.map((option) => (
-                  <label key={option.value} className="status-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={statusFilter.includes(option.value)}
-                      onChange={() => toggleStatusFilter(option.value)}
-                    />
-                    <span className={`status-badge ${option.class}`}>
-                      {option.label}
-                    </span>
-                  </label>
+      {/* Barre de filtres */}
+      <Paper sx={{ p: 3, mb: 4, borderRadius: 3, boxShadow: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              placeholder="Rechercher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+              }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth>
+              <InputLabel>Projet</InputLabel>
+              <Select
+                value={projectFilter}
+                onChange={(e) => {
+                  const newProjectCode = e.target.value;
+                  setProjectFilter(newProjectCode);
+                  updateURLWithFilters(statusFilter, newProjectCode);
+                }}
+                label="Projet"
+                sx={{ borderRadius: 2 }}
+              >
+                <MenuItem value="">Tous les projets</MenuItem>
+                {projects.map((project) => (
+                  <MenuItem key={project.id} value={project.projectCode}>
+                    {project.projectName} ({project.projectCode})
+                  </MenuItem>
                 ))}
-              </div>
-            </div>
-          )}
-        </div>
+              </Select>
+            </FormControl>
+          </Grid>
 
-      </div>
+          <Grid item xs={12} md={4}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<FilterListIcon />}
+              onClick={(e) => setStatusFilterAnchorEl(e.currentTarget)}
+              sx={{
+                height: 56,
+                borderRadius: 2,
+                justifyContent: 'flex-start',
+                textAlign: 'left',
+              }}
+            >
+              {statusFilter.length === 0
+                ? 'Tous les statuts'
+                : statusFilter.length === 1
+                ? statusOptions.find(opt => opt.value === statusFilter[0])?.label
+                : `${statusFilter.length} statuts sélectionnés`}
+            </Button>
+            <Menu
+              anchorEl={statusFilterAnchorEl}
+              open={Boolean(statusFilterAnchorEl)}
+              onClose={() => setStatusFilterAnchorEl(null)}
+              PaperProps={{
+                sx: {
+                  borderRadius: 2,
+                  minWidth: 250,
+                  mt: 1,
+                },
+              }}
+            >
+              <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  Filtrer par statut
+                </Typography>
+                {statusFilter.length > 0 && (
+                  <Button size="small" onClick={clearStatusFilter}>
+                    Effacer
+                  </Button>
+                )}
+              </Box>
+              {statusOptions.map((option) => (
+                <MenuItem key={option.value} onClick={() => toggleStatusFilter(option.value)}>
+                  <Checkbox checked={statusFilter.includes(option.value)} />
+                  <Chip
+                    icon={option.icon}
+                    label={option.label}
+                    color={option.color}
+                    size="small"
+                    sx={{ ml: 1 }}
+                  />
+                </MenuItem>
+              ))}
+            </Menu>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {error && <ErrorMessage message={error} onRetry={() => loadTasks(pagination.currentPage)} />}
 
-      <div className="tasks-table-container">
-        <table className="tasks-table">
-          <thead>
-            <tr>
-              <th>Titre</th>
-              <th>Projet</th>
-              <th>Assignés</th>
-              <th>Statut</th>
-              <th>Échéance</th>
-              <th>Estimation</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+      {/* Tableau des tâches */}
+      <TableContainer
+        component={Paper}
+        sx={{
+          borderRadius: 3,
+          boxShadow: 2,
+          mb: 4,
+          overflow: 'hidden',
+        }}
+      >
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Projet</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Assignés</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Échéance</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Estimation</TableCell>
+              <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {tasks.map((task) => (
-              <tr key={task.id}>
-                <td>
-                  <div className="task-title">{task.title}</div>
+              <TableRow
+                key={task.id}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                  },
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                <TableCell>
+                  <Typography variant="body1" fontWeight={500}>
+                    {task.title}
+                  </Typography>
                   {task.trackingReference && (
-                    <div className="task-reference">{task.trackingReference}</div>
+                    <Typography variant="caption" color="text.secondary">
+                      {task.trackingReference}
+                    </Typography>
                   )}
-                </td>
-                <td>
-                  <select
-                    value={task.projectCode || ''}
-                    onChange={(e) => handleProjectChange(task.id, e.target.value)}
-                    className="project-select"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <option value="">Aucun projet</option>
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.projectCode}>
-                        {project.projectCode} - {project.projectName}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <div className="assignees-cell">
-                    <div className="assignees-list">
-                      {(() => {
-                        const assigneesArray = assigneeToArray(task.assignee);
-                        const names = getAssigneesNames(assigneesArray);
-                        return names.map((name, index) => {
-                          const email = assigneesArray[index];
-                          return (
-                            <span key={email} className="assignee-badge">
-                              {name}
-                              <button
-                                className="remove-assignee"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveAssignee(task.id, email);
-                                }}
-                                title={`Retirer ${name}`}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          );
-                        });
-                      })()}
-                      {(!task.assignee || task.assignee.length === 0) && (
-                        <span className="no-assignee">Non assigné</span>
-                      )}
-                    </div>
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleAddAssignee(task.id, e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="add-assignee-select"
+                </TableCell>
+                <TableCell>
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <Select
+                      value={task.projectCode || ''}
+                      onChange={(e) => handleProjectChange(task.id, e.target.value)}
                       onClick={(e) => e.stopPropagation()}
+                      sx={{ borderRadius: 2 }}
                     >
-                      <option value="">+ Assigner</option>
-                      {persons
-                        .filter(p => !assigneeToArray(task.assignee).includes(p.email))
-                        .map((person) => (
-                          <option key={person.id} value={person.email}>
-                            {person.firstName} {person.lastName}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </td>
-                <td>
-                  <select
-                    value={task.status || ''}
-                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                    className={`status-select ${getStatusInfo(task.status).class}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <option value="">Aucun statut</option>
-                    {statusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                    {/* Afficher le statut personnalisé s'il n'est pas dans la liste */}
-                    {task.status && !statusOptions.find(opt => opt.value === task.status) && (
-                      <option value={task.status}>
-                        {task.status}
-                      </option>
+                      <MenuItem value="">Aucun projet</MenuItem>
+                      {projects.map((project) => (
+                        <MenuItem key={project.id} value={project.projectCode}>
+                          {project.projectCode} - {project.projectName}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    {(() => {
+                      const assigneesArray = assigneeToArray(task.assignee);
+                      const names = getAssigneesNames(assigneesArray);
+                      return names.map((name, index) => {
+                        const email = assigneesArray[index];
+                        return (
+                          <Chip
+                            key={email}
+                            label={name}
+                            size="small"
+                            onDelete={() => handleRemoveAssignee(task.id, email)}
+                            icon={<PersonIcon />}
+                            sx={{
+                              borderRadius: 2,
+                              '& .MuiChip-deleteIcon': {
+                                fontSize: '1rem',
+                              },
+                            }}
+                          />
+                        );
+                      });
+                    })()}
+                    {(!task.assignee || task.assignee.length === 0) && (
+                      <Typography variant="caption" color="text.secondary">
+                        Non assigné
+                      </Typography>
                     )}
-                  </select>
-                </td>
-                <td>{formatDate(task.deadLine)}</td>
-                <td>{task.estimate || '-'}</td>
-                <td>
-                  <div className="action-buttons">
-                    <button onClick={() => handleEditTask(task)} className="btn-edit">
-                      Éditer
-                    </button>
-                    <button onClick={() => handleDeleteTask(task.id)} className="btn-delete">
-                      Supprimer
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                      <Select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleAddAssignee(task.id, e.target.value);
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        displayEmpty
+                        sx={{ borderRadius: 2 }}
+                      >
+                        <MenuItem value="" disabled>
+                          + Assigner
+                        </MenuItem>
+                        {persons
+                          .filter(p => !assigneeToArray(task.assignee).includes(p.email))
+                          .map((person) => (
+                            <MenuItem key={person.id} value={person.email}>
+                              {person.firstName} {person.lastName}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </TableCell>
+                <TableCell>
+                  <FormControl size="small" sx={{ minWidth: 160 }}>
+                    <Select
+                      value={task.status || ''}
+                      onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ borderRadius: 2 }}
+                      renderValue={(value) => {
+                        const statusInfo = getStatusInfo(value);
+                        return (
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Box sx={{ color: `${statusInfo.color}.main`, display: 'flex', alignItems: 'center' }}>
+                              {statusInfo.icon}
+                            </Box>
+                            <Typography variant="body2" fontWeight={500}>
+                              {statusInfo.label}
+                            </Typography>
+                          </Stack>
+                        );
+                      }}
+                    >
+                      <MenuItem value="">
+                        <Typography variant="body2" color="text.secondary">
+                          Aucun statut
+                        </Typography>
+                      </MenuItem>
+                      {statusOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          <Stack direction="row" spacing={1.5} alignItems="center">
+                            <Box sx={{ color: `${option.color}.main`, display: 'flex', alignItems: 'center' }}>
+                              {option.icon}
+                            </Box>
+                            <Typography variant="body2" fontWeight={500}>
+                              {option.label}
+                            </Typography>
+                          </Stack>
+                        </MenuItem>
+                      ))}
+                      {task.status && !statusOptions.find(opt => opt.value === task.status) && (
+                        <MenuItem value={task.status}>
+                          <Typography variant="body2">
+                            {task.status}
+                          </Typography>
+                        </MenuItem>
+                      )}
+                    </Select>
+                  </FormControl>
+                </TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    <Typography variant="body2">{formatDate(task.deadLine)}</Typography>
+                  </Stack>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2">{task.estimate || '-'}</Typography>
+                </TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1} justifyContent="center">
+                    <Tooltip title="Éditer">
+                      <IconButton
+                        onClick={() => handleEditTask(task)}
+                        color="primary"
+                        size="small"
+                        sx={{
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                          },
+                        }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Supprimer">
+                      <IconButton
+                        onClick={() => handleDeleteTask(task.id)}
+                        color="error"
+                        size="small"
+                        sx={{
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.error.main, 0.1),
+                          },
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
 
         {tasks.length === 0 && !loading && (
-          <div className="empty-state">
-            <p>Aucune tâche trouvée</p>
-          </div>
+          <Box sx={{ p: 8, textAlign: 'center' }}>
+            <AssignmentIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary">
+              Aucune tâche trouvée
+            </Typography>
+          </Box>
         )}
-      </div>
+      </TableContainer>
 
       <Pagination
         currentPage={pagination.currentPage}
@@ -711,171 +904,222 @@ const TasksPage = () => {
         onPageSizeChange={handlePageSizeChange}
       />
 
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingTask ? 'Modifier la tâche' : 'Nouvelle tâche'}</h2>
-              <button onClick={() => setShowModal(false)} className="btn-close">
-                ×
-              </button>
-            </div>
+      {/* Modal de création/édition */}
+      <Dialog
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h5" fontWeight={700}>
+              {editingTask ? 'Modifier la tâche' : 'Nouvelle tâche'}
+            </Typography>
+            <IconButton onClick={() => setShowModal(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-            <form onSubmit={handleSubmit} className="task-form">
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Titre *</label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                  />
-                </div>
+        <form onSubmit={handleSubmit}>
+          <DialogContent dividers sx={{ py: 3 }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={8}>
+                <TextField
+                  fullWidth
+                  label="Titre"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  required
+                  InputProps={{
+                    startAdornment: <AssignmentIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                  }}
+                />
+              </Grid>
 
-                <div className="form-group">
-                  <label>Statut</label>
-                  <select
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Statut</InputLabel>
+                  <Select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    label="Statut"
+                    renderValue={(value) => {
+                      const statusInfo = getStatusInfo(value);
+                      return (
+                        <Chip
+                          icon={statusInfo.icon}
+                          label={statusInfo.label}
+                          color={statusInfo.color}
+                          size="small"
+                        />
+                      );
+                    }}
                   >
                     {statusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
+                      <MenuItem key={option.value} value={option.value}>
+                        <Chip
+                          icon={option.icon}
+                          label={option.label}
+                          color={option.color}
+                          size="small"
+                        />
+                      </MenuItem>
                     ))}
-                  </select>
-                </div>
-              </div>
+                  </Select>
+                </FormControl>
+              </Grid>
 
-              <div className="form-group">
-                <label>Description *</label>
-                <textarea
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows="4"
+                  multiline
+                  rows={4}
                   required
                 />
-              </div>
+              </Grid>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Projet</label>
-                  <select
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Projet</InputLabel>
+                  <Select
                     value={formData.projectCode}
                     onChange={(e) => setFormData({ ...formData, projectCode: e.target.value })}
+                    label="Projet"
                   >
-                    <option value="">Aucun</option>
+                    <MenuItem value="">Aucun</MenuItem>
                     {projects.map((project) => (
-                      <option key={project.id} value={project.projectCode}>
+                      <MenuItem key={project.id} value={project.projectCode}>
                         {project.projectName} ({project.projectCode})
-                      </option>
+                      </MenuItem>
                     ))}
-                  </select>
-                </div>
+                  </Select>
+                </FormControl>
+              </Grid>
 
-                <div className="form-group">
-                  <label>Estimation</label>
-                  <input
-                    type="text"
-                    value={formData.estimate}
-                    onChange={(e) => setFormData({ ...formData, estimate: e.target.value })}
-                    placeholder="ex: 3h, 2j"
-                  />
-                </div>
-              </div>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Estimation"
+                  value={formData.estimate}
+                  onChange={(e) => setFormData({ ...formData, estimate: e.target.value })}
+                  placeholder="ex: 3h, 2j"
+                />
+              </Grid>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Début prévu</label>
-                  <input
-                    type="date"
-                    value={formData.plannedStart}
-                    onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
-                  />
-                </div>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Début prévu"
+                  value={formData.plannedStart}
+                  onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{
+                    startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                  }}
+                />
+              </Grid>
 
-                <div className="form-group">
-                  <label>Échéance</label>
-                  <input
-                    type="date"
-                    value={formData.deadLine}
-                    onChange={(e) => setFormData({ ...formData, deadLine: e.target.value })}
-                  />
-                </div>
-              </div>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Échéance"
+                  value={formData.deadLine}
+                  onChange={(e) => setFormData({ ...formData, deadLine: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{
+                    startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                  }}
+                />
+              </Grid>
 
-              <div className="form-group">
-                <label>Référence de suivi</label>
-                <input
-                  type="text"
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Référence de suivi"
                   value={formData.trackingReference}
-                  onChange={(e) =>
-                    setFormData({ ...formData, trackingReference: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, trackingReference: e.target.value })}
                   placeholder="ex: JIRA-12345"
                 />
-              </div>
+              </Grid>
 
-              <div className="form-group">
-                <label>Assignés</label>
-                <div className="assignees-selector">
-                  <div className="selected-assignees">
-                    {(formData.assignees || []).map(email => {
-                      const person = persons.find(p => p.email === email);
-                      const name = person ? `${person.firstName} ${person.lastName}` : email;
-                      return (
-                        <span key={email} className="selected-assignee-badge">
-                          {name}
-                          <button
-                            type="button"
-                            className="remove-badge"
-                            onClick={() => handleAssigneeToggle(email)}
-                            title={`Retirer ${name}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      );
-                    })}
-                    {(!formData.assignees || formData.assignees.length === 0) && (
-                      <span className="no-selection">Aucun assigné</span>
-                    )}
-                  </div>
-                  <div className="available-assignees">
-                    {persons
-                      .filter(p => !(formData.assignees || []).includes(p.email))
-                      .map(person => (
-                        <button
-                          key={person.id}
-                          type="button"
-                          className="assignee-option"
-                          onClick={() => handleAssigneeToggle(person.email)}
-                          title={`Assigner à ${person.firstName} ${person.lastName}`}
-                        >
-                          + {person.firstName} {person.lastName}
-                        </button>
-                      ))}
-                    {persons.filter(p => !(formData.assignees || []).includes(p.email)).length === 0 && (
-                      <span className="no-options">Toutes les personnes sont assignées</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                  Assignés
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+                  {(formData.assignees || []).map(email => {
+                    const person = persons.find(p => p.email === email);
+                    const name = person ? `${person.firstName} ${person.lastName}` : email;
+                    return (
+                      <Chip
+                        key={email}
+                        label={name}
+                        onDelete={() => handleAssigneeToggle(email)}
+                        icon={<PersonIcon />}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ borderRadius: 2 }}
+                      />
+                    );
+                  })}
+                  {(!formData.assignees || formData.assignees.length === 0) && (
+                    <Typography variant="caption" color="text.secondary">
+                      Aucun assigné
+                    </Typography>
+                  )}
+                </Stack>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {persons
+                    .filter(p => !(formData.assignees || []).includes(p.email))
+                    .map(person => (
+                      <Chip
+                        key={person.id}
+                        label={`+ ${person.firstName} ${person.lastName}`}
+                        onClick={() => handleAssigneeToggle(person.email)}
+                        variant="outlined"
+                        sx={{
+                          borderRadius: 2,
+                          borderStyle: 'dashed',
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                            borderStyle: 'solid',
+                          },
+                        }}
+                      />
+                    ))}
+                  {persons.filter(p => !(formData.assignees || []).includes(p.email)).length === 0 && (
+                    <Typography variant="caption" color="text.secondary">
+                      Toutes les personnes sont assignées
+                    </Typography>
+                  )}
+                </Stack>
+              </Grid>
+            </Grid>
+          </DialogContent>
 
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-cancel">
-                  Annuler
-                </button>
-                <button type="submit" className="btn-submit">
-                  {editingTask ? 'Mettre à jour' : 'Créer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setShowModal(false)} variant="outlined" size="large">
+              Annuler
+            </Button>
+            <Button type="submit" variant="contained" size="large" startIcon={editingTask ? <EditIcon /> : <AddIcon />}>
+              {editingTask ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+    </Container>
   );
 };
 

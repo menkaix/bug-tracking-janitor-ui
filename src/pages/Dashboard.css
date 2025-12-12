@@ -1,11 +1,11 @@
 .dashboard {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 32px 24px;
 }
 
 .dashboard-header {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .dashboard-header h1 {
@@ -18,6 +18,67 @@
   color: #718096;
   margin: 0;
   font-size: 16px;
+}
+
+/* Onglets */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 32px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.tab {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  color: #718096;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.tab:hover {
+  color: #4a5568;
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.tab.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+  background: rgba(102, 126, 234, 0.08);
+}
+
+/* Contenu des onglets */
+.tab-content {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.section-title {
+  font-size: 20px;
+  color: #2d3748;
+  margin: 32px 0 16px 0;
+  font-weight: 700;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.section-title:first-child {
+  margin-top: 0;
 }
 
 .stats-grid {
@@ -89,6 +150,71 @@
   background: rgba(72, 187, 120, 0.1);
 }
 
+.stat-danger .stat-icon {
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.stat-secondary .stat-icon {
+  background: rgba(160, 174, 192, 0.1);
+}
+
+/* Nouveaux styles de cartes avec dégradés */
+.stat-gradient-1 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.stat-gradient-1 .stat-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.stat-gradient-1 .stat-content h3,
+.stat-gradient-1 .stat-number {
+  color: white;
+}
+
+.stat-gradient-2 {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.stat-gradient-2 .stat-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.stat-gradient-2 .stat-content h3,
+.stat-gradient-2 .stat-number {
+  color: white;
+}
+
+.stat-gradient-3 {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  color: white;
+}
+
+.stat-gradient-3 .stat-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.stat-gradient-3 .stat-content h3,
+.stat-gradient-3 .stat-number {
+  color: white;
+}
+
+.stat-gradient-4 {
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+  color: white;
+}
+
+.stat-gradient-4 .stat-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.stat-gradient-4 .stat-content h3,
+.stat-gradient-4 .stat-number {
+  color: white;
+}
+
 .stat-content h3 {
   font-size: 14px;
   color: #718096;
@@ -137,9 +263,469 @@
   font-size: 16px;
 }
 
+/* Top Performers */
+.top-performers {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+  margin-bottom: 32px;
+}
+
+.performer-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.performer-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.performer-rank {
+  font-size: 32px;
+  font-weight: 800;
+  color: #667eea;
+  min-width: 60px;
+  text-align: center;
+}
+
+.performer-info {
+  flex: 1;
+}
+
+.performer-info h3 {
+  font-size: 18px;
+  color: #2d3748;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+}
+
+.performer-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.badge-success {
+  background: rgba(72, 187, 120, 0.15);
+  color: #2f855a;
+}
+
+.badge-info {
+  background: rgba(66, 153, 225, 0.15);
+  color: #2c5282;
+}
+
+.badge-primary {
+  background: rgba(102, 126, 234, 0.15);
+  color: #5a67d8;
+}
+
+.performer-progress {
+  width: 100px;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+}
+
+/* KPI par projet */
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.project-item {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.project-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.project-info {
+  flex: 1;
+}
+
+.project-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0 0 8px 0;
+}
+
+.project-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge-status {
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.badge-active {
+  background: rgba(72, 187, 120, 0.15);
+  color: #2f855a;
+}
+
+.badge-in_progress,
+.badge-in-progress {
+  background: rgba(237, 137, 54, 0.15);
+  color: #c05621;
+}
+
+.badge-completed,
+.badge-done {
+  background: rgba(66, 153, 225, 0.15);
+  color: #2c5282;
+}
+
+.badge-danger {
+  background: rgba(245, 101, 101, 0.15);
+  color: #c53030;
+}
+
+.project-completion {
+  text-align: right;
+}
+
+.completion-rate {
+  font-size: 32px;
+  font-weight: 800;
+  color: #667eea;
+}
+
+.project-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+}
+
+.project-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.project-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #718096;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.stat-value.stat-success {
+  color: #48bb78;
+}
+
+.stat-value.stat-warning {
+  color: #ed8936;
+}
+
+.stat-value.stat-secondary {
+  color: #718096;
+}
+
+/* Performance individuelle par personne */
+.person-performance-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.person-performance-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.person-performance-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.person-perf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.person-perf-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0;
+}
+
+.person-perf-completion {
+  font-size: 24px;
+  font-weight: 800;
+  color: #667eea;
+}
+
+.person-perf-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.perf-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.perf-bar-label {
+  font-size: 12px;
+  color: #718096;
+  font-weight: 600;
+  min-width: 80px;
+}
+
+.perf-bar-container {
+  flex: 1;
+  height: 24px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.perf-bar {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  transition: width 0.3s ease;
+  min-width: 30px;
+}
+
+.perf-bar-completed {
+  background: linear-gradient(90deg, #48bb78 0%, #38a169 100%);
+}
+
+.perf-bar-active {
+  background: linear-gradient(90deg, #f6ad55 0%, #ed8936 100%);
+}
+
+.perf-bar-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+}
+
+.person-perf-details {
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.perf-detail {
+  font-size: 13px;
+  color: #718096;
+}
+
+.perf-detail strong {
+  color: #2d3748;
+  font-weight: 700;
+}
+
+/* Distribution de la charge de travail */
+.workload-section {
+  margin-top: 16px;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.workload-info {
+  color: #718096;
+  font-size: 14px;
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+.workload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workload-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+  transition: all 0.3s ease;
+}
+
+.workload-item:hover {
+  background: #edf2f7;
+  transform: translateX(4px);
+}
+
+.workload-person {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.workload-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.workload-count {
+  font-size: 14px;
+  color: #718096;
+  font-weight: 500;
+}
+
+.workload-bar-container {
+  width: 100%;
+}
+
+.workload-bar {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.workload-bar-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #f6ad55 0%, #ed8936 100%);
+  transition: width 0.3s ease;
+  border-radius: 6px 0 0 6px;
+}
+
+.workload-bar-completed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #48bb78 0%, #38a169 100%);
+  transition: width 0.3s ease;
+  border-radius: 6px 0 0 6px;
+  opacity: 0.7;
+}
+
+.workload-details {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workload-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workload-badge-progress {
+  background: rgba(237, 137, 54, 0.15);
+  color: #c05621;
+}
+
+.workload-badge-todo {
+  background: rgba(160, 174, 192, 0.15);
+  color: #4a5568;
+}
+
+.workload-badge-done {
+  background: rgba(72, 187, 120, 0.15);
+  color: #2f855a;
+}
+
 @media (max-width: 768px) {
   .dashboard {
     padding: 20px 16px;
+  }
+
+  .tabs {
+    overflow-x: auto;
+  }
+
+  .tab {
+    padding: 10px 16px;
+    font-size: 14px;
+    white-space: nowrap;
   }
 
   .stats-grid {
@@ -148,6 +734,60 @@
 
   .stat-number {
     font-size: 28px;
+  }
+
+  .section-title {
+    font-size: 18px;
+  }
+
+  .performer-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .performer-rank {
+    min-width: auto;
+  }
+
+  .performer-stats {
+    justify-content: center;
+  }
+
+  .performer-progress {
+    width: 100%;
+  }
+
+  /* KPI par projet mobile */
+  .project-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .project-completion {
+    text-align: left;
+  }
+
+  .completion-rate {
+    font-size: 24px;
+  }
+
+  .project-stats {
+    gap: 16px;
+  }
+
+  /* Performance individuelle mobile */
+  .person-performance-list {
+    grid-template-columns: 1fr;
+  }
+
+  .perf-bar-label {
+    min-width: 70px;
+    font-size: 11px;
+  }
+
+  .person-perf-details {
+    flex-direction: column;
+    gap: 8px;
   }
 
   .dashboard-actions {

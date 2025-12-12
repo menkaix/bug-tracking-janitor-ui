@@ -1,12 +1,47 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Container,
+  Typography,
+  Box,
+  Button,
+  TextField,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Stack,
+  Chip,
+  Tooltip,
+  alpha,
+  useTheme,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Search as SearchIcon,
+  Person as PersonIcon,
+  Email as EmailIcon,
+  Close as CloseIcon,
+  CalendarToday as CalendarIcon,
+  People as PeopleIcon,
+} from '@mui/icons-material';
 import personService from '../services/person.service';
 import logger from '../services/logger.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
-import './PersonsPage.css';
 
 function PersonsPage() {
+  const theme = useTheme();
   // États pour la liste des personnes
   const [persons, setPersons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -215,23 +250,50 @@ function PersonsPage() {
   };
 
   return (
-    <div className="persons-page">
-      <div className="persons-header">
-        <h1>Gestion des Personnes</h1>
-        <button className="btn-primary" onClick={handleCreateClick}>
-          + Nouvelle Personne
-        </button>
-      </div>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* En-tête */}
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Gestion des Personnes
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {pagination.totalElements} personne(s) au total
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleCreateClick}
+          size="medium"
+          sx={{
+            borderRadius: 2,
+            px: 2,
+            py: 1,
+            fontWeight: 500,
+          }}
+        >
+          Nouvelle Personne
+        </Button>
+      </Box>
 
       {/* Barre de recherche */}
-      <div className="persons-filters">
-        <input
-          type="text"
+      <Box sx={{ mb: 4 }}>
+        <TextField
+          fullWidth
           placeholder="Rechercher par prénom, nom ou email..."
-          className="search-input"
           onChange={handleSearchChange}
+          InputProps={{
+            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+          }}
+          sx={{
+            maxWidth: 600,
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 3,
+            },
+          }}
         />
-      </div>
+      </Box>
 
       {/* Affichage du loading */}
       {loading && <Loading />}
@@ -247,64 +309,125 @@ function PersonsPage() {
       {/* Tableau des personnes */}
       {!loading && !error && (
         <>
-          <div className="persons-table-container">
-            <table className="persons-table">
-              <thead>
-                <tr>
-                  <th>Prénom</th>
-                  <th>Nom</th>
-                  <th>Email</th>
-                  <th>Date de création</th>
-                  <th>Dernière modification</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TableContainer
+            component={Paper}
+            sx={{
+              borderRadius: 3,
+              boxShadow: 2,
+              mb: 4,
+              overflow: 'hidden',
+            }}
+          >
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.95rem' }}>Nom Complet</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.95rem' }}>Email</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.95rem' }}>Date de création</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.95rem' }}>Dernière modification</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.95rem', textAlign: 'center' }}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {persons.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="no-data">
-                      Aucune personne trouvée
-                    </td>
-                  </tr>
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <Box sx={{ p: 8, textAlign: 'center' }}>
+                        <PeopleIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                        <Typography variant="h6" color="text.secondary">
+                          Aucune personne trouvée
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   persons.map((person) => (
-                    <tr key={person.id}>
-                      <td>{person.firstName || '-'}</td>
-                      <td>{person.lastName || '-'}</td>
-                      <td>
-                        <a href={`mailto:${person.email}`} className="email-link">
-                          {person.email}
-                        </a>
-                      </td>
-                      <td>{formatDate(person.creationDate)}</td>
-                      <td>{formatDate(person.updateDate)}</td>
-                      <td>
-                        <div className="action-buttons">
-                          <button
-                            className="btn-icon btn-edit"
-                            onClick={() => handleEditClick(person)}
-                            title="Modifier"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            className="btn-icon btn-delete"
-                            onClick={() => handleDelete(
-                              person.id,
-                              `${person.firstName || ''} ${person.lastName || ''}`.trim() || person.email
-                            )}
-                            title="Supprimer"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    <TableRow
+                      key={person.id}
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                        },
+                        transition: 'background-color 0.2s',
+                      }}
+                    >
+                      <TableCell>
+                        <Typography variant="body1" fontWeight={600}>
+                          {person.firstName || '-'} {person.lastName || ''}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={<EmailIcon />}
+                          label={person.email}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          component="a"
+                          href={`mailto:${person.email}`}
+                          clickable
+                          sx={{
+                            borderRadius: 2,
+                            textDecoration: 'none',
+                            '&:hover': {
+                              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                            },
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                          <Typography variant="body2">{formatDate(person.creationDate)}</Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                          <Typography variant="body2">{formatDate(person.updateDate)}</Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} justifyContent="center">
+                          <Tooltip title="Modifier">
+                            <IconButton
+                              onClick={() => handleEditClick(person)}
+                              color="primary"
+                              size="small"
+                              sx={{
+                                '&:hover': {
+                                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                                },
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Supprimer">
+                            <IconButton
+                              onClick={() => handleDelete(
+                                person.id,
+                                `${person.firstName || ''} ${person.lastName || ''}`.trim() || person.email
+                              )}
+                              color="error"
+                              size="small"
+                              sx={{
+                                '&:hover': {
+                                  backgroundColor: alpha(theme.palette.error.main, 0.1),
+                                },
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
@@ -321,67 +444,82 @@ function PersonsPage() {
       )}
 
       {/* Modale de création/édition */}
-      {showModal && (
-        <div className="modal-overlay" onClick={handleCloseModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingPerson ? 'Modifier la personne' : 'Nouvelle personne'}</h2>
-              <button className="modal-close" onClick={handleCloseModal}>
-                ×
-              </button>
-            </div>
+      <Dialog
+        open={showModal}
+        onClose={handleCloseModal}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h5" fontWeight={700}>
+              {editingPerson ? 'Modifier la personne' : 'Nouvelle personne'}
+            </Typography>
+            <IconButton onClick={handleCloseModal} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label htmlFor="firstName">Prénom</label>
-                <input
-                  type="text"
-                  id="firstName"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleFormChange}
-                  placeholder="Jean"
-                />
-              </div>
+        <form onSubmit={handleSubmit}>
+          <DialogContent dividers sx={{ py: 3 }}>
+            <Stack spacing={3}>
+              <TextField
+                fullWidth
+                label="Prénom"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleFormChange}
+                placeholder="Jean"
+                InputProps={{
+                  startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
 
-              <div className="form-group">
-                <label htmlFor="lastName">Nom</label>
-                <input
-                  type="text"
-                  id="lastName"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleFormChange}
-                  placeholder="Dupont"
-                />
-              </div>
+              <TextField
+                fullWidth
+                label="Nom"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleFormChange}
+                placeholder="Dupont"
+                InputProps={{
+                  startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
 
-              <div className="form-group">
-                <label htmlFor="email">Email *</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleFormChange}
-                  placeholder="jean.dupont@example.com"
-                  required
-                />
-              </div>
+              <TextField
+                fullWidth
+                type="email"
+                label="Email"
+                name="email"
+                value={formData.email}
+                onChange={handleFormChange}
+                placeholder="jean.dupont@example.com"
+                required
+                InputProps={{
+                  startAdornment: <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
+            </Stack>
+          </DialogContent>
 
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={handleCloseModal}>
-                  Annuler
-                </button>
-                <button type="submit" className="btn-submit">
-                  {editingPerson ? 'Mettre à jour' : 'Créer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={handleCloseModal} variant="outlined" size="large">
+              Annuler
+            </Button>
+            <Button type="submit" variant="contained" size="large" startIcon={editingPerson ? <EditIcon /> : <AddIcon />}>
+              {editingPerson ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+    </Container>
   );
 }
 
