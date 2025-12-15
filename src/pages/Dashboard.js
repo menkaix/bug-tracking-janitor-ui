@@ -32,12 +32,31 @@ import {
   SentimentDissatisfied as SleepIcon,
   Speed as SpeedIcon,
   BarChart as BarChartIcon,
+  Edit as EditIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+  CalendarToday as CalendarIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
+import {
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  IconButton,
+} from '@mui/material';
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
+import OccupationCalendar from '../components/Dashboard/OccupationCalendar';
 import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
 
 /**
@@ -77,8 +96,26 @@ const Dashboard = () => {
     topPerformers: [],
     workloadDistribution: [],
   });
+  const [allTasks, setAllTasks] = useState([]);
+  const [allPersons, setAllPersons] = useState([]);
+  const [allProjects, setAllProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // State for Edit Modal
+  const [showModal, setShowModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    projectCode: '',
+    status: 'todo',
+    estimate: '',
+    trackingReference: '',
+    plannedStart: '',
+    deadLine: '',
+    assignees: [],
+  });
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -95,6 +132,10 @@ const Dashboard = () => {
         const tasks = tasksResult.data.content || [];
         const projects = projectsResult.data.content || [];
         const persons = personsResult.data.content || [];
+
+        setAllTasks(tasks);
+        setAllPersons(persons);
+        setAllProjects(projects);
 
         calculateProjectKPIs(tasks, projects);
         calculatePersonKPIs(tasks, persons);
@@ -431,6 +472,84 @@ const Dashboard = () => {
   if (loading) return <Loading message="Chargement du tableau de bord..." />;
   if (error) return <ErrorMessage message={error} onRetry={loadDashboardData} />;
 
+  // Form Helpers
+  const assigneeToArray = (assigneeString) => {
+    if (!assigneeString) return [];
+    return assigneeString.split(',').map(e => e.trim()).filter(e => e);
+  };
+
+  const arrayToAssignee = (assigneesArray) => {
+    if (!assigneesArray || assigneesArray.length === 0) return '';
+    return assigneesArray.join(',');
+  };
+
+  const handleTaskClick = (task) => {
+    setEditingTask(task);
+    setFormData({
+      title: task.title || '',
+      description: task.description || '',
+      projectCode: task.projectCode || '',
+      status: task.status || 'todo',
+      estimate: task.estimate || '',
+      trackingReference: task.trackingReference || '',
+      plannedStart: task.plannedStart ? task.plannedStart.split('T')[0] : '',
+      deadLine: task.deadLine ? task.deadLine.split('T')[0] : '', // Use deadLine directly as in TasksPage
+      assignees: assigneeToArray(task.assignee),
+    });
+    setShowModal(true);
+  };
+
+  const handleAssigneeToggle = (email) => {
+    setFormData(prev => {
+      const currentAssignees = prev.assignees || [];
+      const newAssignees = currentAssignees.includes(email)
+        ? currentAssignees.filter(e => e !== email)
+        : [...currentAssignees, email];
+      return { ...prev, assignees: newAssignees };
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const { assignees, ...restFormData } = formData;
+    const taskData = {
+      ...restFormData,
+      assignee: arrayToAssignee(assignees),
+      plannedStart: formData.plannedStart ? new Date(formData.plannedStart).toISOString() : null,
+      deadLine: formData.deadLine ? new Date(formData.deadLine).toISOString() : null,
+    };
+
+    let result;
+    if (editingTask) {
+      result = await taskService.updateTask(editingTask.id, taskData);
+    } else {
+      // Should not happen in this context usually, but good to have
+      result = await taskService.createTask(taskData);
+    }
+
+    if (result.success) {
+      setShowModal(false);
+      loadDashboardData(); // Refresh calendar data
+    } else {
+      alert('Erreur lors de la sauvegarde de la tâche');
+    }
+  };
+
+  const statusOptions = [
+    { value: 'todo', label: 'À faire', color: 'secondary', icon: <AssignmentIcon fontSize="small" /> },
+    { value: 'pending', label: 'En attente', color: 'warning', icon: <PendingIcon fontSize="small" /> },
+    { value: 'in-progress', label: 'En cours', color: 'info', icon: <ScheduleIcon fontSize="small" /> },
+    { value: 'to-study', label: 'À étudier', color: 'default', icon: <FolderSpecialIcon fontSize="small" /> }, // Reusing existing icon if necessary or importing Psychology
+    { value: 'done', label: 'Terminé', color: 'success', icon: <CheckCircleIcon fontSize="small" /> },
+    { value: 'no-status', label: 'Sans statut', color: 'default', icon: <WarningIcon fontSize="small" /> }, // Reusing existing icon
+  ];
+
+  const getStatusInfo = (status) => {
+    if (!status) return { label: 'Aucun statut', color: 'default', icon: <WarningIcon fontSize="small" /> };
+    return statusOptions.find(opt => opt.value === status) || { label: status, color: 'default', icon: <AssignmentIcon fontSize="small" /> };
+  };
+
   const StatCard = ({ icon, title, value, color = 'primary', onClick }) => (
     <Card
       onClick={onClick}
@@ -439,9 +558,9 @@ const Dashboard = () => {
         transition: 'all 0.2s ease-in-out',
         '&:hover': onClick
           ? {
-              transform: 'translateY(-4px)',
-              boxShadow: 6,
-            }
+            transform: 'translateY(-4px)',
+            boxShadow: 6,
+          }
           : {},
       }}
     >
@@ -498,6 +617,7 @@ const Dashboard = () => {
         >
           <Tab icon={<BarChartIcon />} iconPosition="start" label="KPI Projets" />
           <Tab icon={<PeopleIcon />} iconPosition="start" label="KPI Personnes" />
+          <Tab icon={<ScheduleIcon />} iconPosition="start" label="Calendrier d'occupation" />
         </Tabs>
       </Box>
 
@@ -887,11 +1007,10 @@ const Dashboard = () => {
               <StatCard
                 icon={<SpeedIcon />}
                 title="Productivité"
-                value={`${
-                  personsData.totalTasksAssigned > 0
-                    ? ((personsData.completedTasksByPersons / personsData.totalTasksAssigned) * 100).toFixed(0)
-                    : 0
-                }%`}
+                value={`${personsData.totalTasksAssigned > 0
+                  ? ((personsData.completedTasksByPersons / personsData.totalTasksAssigned) * 100).toFixed(0)
+                  : 0
+                  }%`}
                 color="success"
               />
             </Grid>
@@ -983,6 +1102,188 @@ const Dashboard = () => {
           )}
         </Box>
       )}
+
+      {/* Contenu onglet Calendrier */}
+      {activeTab === 2 && (
+        <Box>
+          <Typography variant="h5" fontWeight={600} sx={{ mb: 3 }}>
+            Calendrier d'Occupation
+          </Typography>
+          <OccupationCalendar tasks={allTasks} persons={allPersons} onTaskClick={handleTaskClick} />
+        </Box>
+      )}
+
+      {/* Modal d'édition */}
+      <Dialog
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h5" fontWeight={700}>
+              Modifier la tâche
+            </Typography>
+            <IconButton onClick={() => setShowModal(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <form onSubmit={handleSubmit}>
+          <DialogContent dividers sx={{ py: 3 }}>
+            <Stack spacing={3}>
+              <TextField
+                fullWidth
+                label="Titre"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                required
+                InputProps={{
+                  startAdornment: <AssignmentIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
+
+              <Stack direction="row" spacing={2}>
+                <FormControl sx={{ minWidth: 200 }}>
+                  <InputLabel>Statut</InputLabel>
+                  <Select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    label="Statut"
+                    renderValue={(value) => {
+                      const statusInfo = getStatusInfo(value);
+                      return (
+                        <Chip
+                          icon={statusInfo.icon}
+                          label={statusInfo.label}
+                          color={statusInfo.color}
+                          size="small"
+                        />
+                      );
+                    }}
+                  >
+                    {statusOptions.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        <Chip
+                          icon={option.icon}
+                          label={option.label}
+                          color={option.color}
+                          size="small"
+                        />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {/* Reuse projectsData for project list if available, but better to use all projects. 
+                   We loaded 'projectsResult' in loadDashboardData but didn't store full list in state, only KPIs.
+                   Oops, calculateProjectKPIs uses 'projects', but we discard the raw list unless we store it.
+                   Plan: Should modify loadDashboardData to store 'allProjects' as well.
+                   Quick fix: Filter 'projectsData.projectDetails' which is derived from projects list, 
+                   or just use projectDetails for the dropdown since it has ID/Name/Code?
+                   projectDetails items have: id, name, status... need Code.
+                   Wait, projectDetails is { id, name, ... }. ProjectCode is likely needed.
+                   Let's check calculateProjectKPIs. It maps projects.
+                   It has p.projectCode accessible in the closure scope but returns new object.
+                   Let's assume projectDetails has name and we can map. 
+                   Actually, I DO NOT have 'allProjects' state yet. 
+                   I'll add 'allProjects' state and update 'loadDashboardData' in the same tool call if possible or next.
+                   Let's add 'allProjects' state now.
+                */}
+                <FormControl fullWidth>
+                  <InputLabel>Projet</InputLabel>
+                  <Select
+                    value={formData.projectCode || ''}
+                    onChange={(e) => setFormData({ ...formData, projectCode: e.target.value })}
+                    label="Projet"
+                  >
+                    <MenuItem value="">Aucun projet</MenuItem>
+                    {allProjects.map((project) => (
+                      <MenuItem key={project.id} value={project.projectCode}>
+                        {project.projectCode} - {project.projectName}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+
+              {/* Description */}
+              <Box>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>Description</Typography>
+                <TextField
+                  fullWidth
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  multiline
+                  minRows={6}
+                  maxRows={12}
+                />
+              </Box>
+
+              {/* Dates */}
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  type="date"
+                  label="Début prévu"
+                  value={formData.plannedStart}
+                  onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                />
+                <TextField
+                  type="date"
+                  label="Échéance"
+                  value={formData.deadLine}
+                  onChange={(e) => setFormData({ ...formData, deadLine: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                />
+              </Stack>
+
+              {/* Reference */}
+              <TextField
+                fullWidth
+                label="Référence de suivi"
+                value={formData.trackingReference}
+                onChange={(e) => setFormData({ ...formData, trackingReference: e.target.value })}
+              />
+
+              {/* Assignees */}
+              <Box>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>Assignés</Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {allPersons.map(person => {
+                    const isAssigned = (formData.assignees || []).includes(person.email);
+                    return (
+                      <Chip
+                        key={person.email}
+                        label={`${person.firstName} ${person.lastName}`}
+                        onClick={() => handleAssigneeToggle(person.email)}
+                        color={isAssigned ? "primary" : "default"}
+                        variant={isAssigned ? "filled" : "outlined"}
+                        avatar={<Avatar sx={{ bgcolor: isAssigned ? 'inherit' : theme.palette.grey[300] }}>{person.firstName[0]}</Avatar>}
+                        sx={{ cursor: 'pointer' }}
+                      />
+                    );
+                  })}
+                </Stack>
+              </Box>
+
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setShowModal(false)} variant="outlined">
+              Annuler
+            </Button>
+            <Button type="submit" variant="contained" startIcon={<EditIcon />}>
+              Mettre à jour
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
     </Container>
   );
 };
