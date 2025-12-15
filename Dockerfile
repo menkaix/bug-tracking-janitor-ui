@@ -12,22 +12,30 @@ RUN npm ci --silent
 
 # Copier le code source
 COPY . .
-COPY .env .env
+#COPY .env .env
 
 # Build de l'application pour la production
 RUN npm run build
 
-# Stage 2: Serveur nginx pour servir l'application
-FROM nginx:alpine
+# Stage 2: Serveur Node.js pour servir l'application avec Express
+FROM node:18-alpine
 
-# Copier les fichiers buildés depuis le stage précédent
-COPY --from=build /app/build /usr/share/nginx/html
+WORKDIR /app
 
-# Copier la configuration nginx personnalisée
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copier package.json et package-lock.json
+COPY package*.json ./
 
-# Exposer le port 80
-EXPOSE 80
+# Installer seulement les dépendances de production
+RUN npm ci --omit=dev
 
-# Démarrer nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Copier le serveur Express
+COPY server.js .
+
+# Copier le build React depuis l'étape de build
+COPY --from=build /app/build ./build
+
+# Exposer le port 3000
+EXPOSE 3000
+
+# Démarrer le serveur
+CMD ["node", "server.js"]
