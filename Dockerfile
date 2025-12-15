@@ -12,6 +12,7 @@ RUN npm ci --silent
 
 # Copier le code source
 COPY . .
+COPY .env .env
 
 # Build de l'application pour la production
 RUN npm run build
