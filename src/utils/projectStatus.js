@@ -15,7 +15,10 @@ export const calculateProjectStatus = (tasks) => {
   const taskStatuses = tasks.map(t => t.status ? t.status.toLowerCase() : '');
 
   // Vérifier si toutes les tâches sont terminées
-  const allDone = taskStatuses.every(status => status === 'done');
+  const allDone = taskStatuses.every(status =>
+    status === 'done' ||
+    status === 'canceled'
+  );
   if (allDone) {
     return 'COMPLETED';
   }
@@ -26,7 +29,9 @@ export const calculateProjectStatus = (tasks) => {
     status === 'to-do' ||
     status === 'in-progress' ||
     status === 'in_progress' ||
-    status === 'inprogress'
+    status === 'inprogress' ||
+    status === 'to-test' ||
+    status === 'testing'
   );
   if (hasActiveTask) {
     return 'ACTIVE';
