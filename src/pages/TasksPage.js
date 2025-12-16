@@ -46,6 +46,10 @@ import {
   Pending as PendingIcon,
   Psychology as PsychologyIcon,
   Cancel as CancelIcon,
+  Block as BlockIcon,
+  FactCheck as FactCheckIcon,
+  Science as ScienceIcon,
+  RemoveDone as RemoveDoneIcon,
 } from '@mui/icons-material';
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
@@ -90,6 +94,8 @@ const TasksPage = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [selectedTasks, setSelectedTasks] = useState([]);
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -421,10 +427,28 @@ const TasksPage = () => {
       icon: <CheckCircleIcon fontSize="small" />
     },
     {
+      value: 'to-test',
+      label: 'À tester',
+      color: 'info',
+      icon: <FactCheckIcon fontSize="small" />
+    },
+    {
+      value: 'testing',
+      label: 'En cours de test',
+      color: 'info',
+      icon: <ScienceIcon fontSize="small" />
+    },
+    {
+      value: 'canceled',
+      label: 'Annulé',
+      color: 'error',
+      icon: <BlockIcon fontSize="small" />
+    },
+    {
       value: 'no-status',
       label: 'Sans statut',
       color: 'default',
-      icon: <CancelIcon fontSize="small" />
+      icon: <RemoveDoneIcon fontSize="small" />
     },
   ];
 
@@ -590,6 +614,95 @@ const TasksPage = () => {
     // Mettre à jour l'URL
     updateURLWithFilters([], projectFilter);
   };
+
+  const handleSelectAll = (event) => {
+    if (event.target.checked) {
+      setSelectedTasks(tasks.map((task) => task.id));
+    } else {
+      setSelectedTasks([]);
+    }
+  };
+
+  const handleSelectTask = (event, id) => {
+    const selectedIndex = selectedTasks.indexOf(id);
+    let newSelected = [];
+
+    if (selectedIndex === -1) {
+      newSelected = newSelected.concat(selectedTasks, id);
+    } else if (selectedIndex === 0) {
+      newSelected = newSelected.concat(selectedTasks.slice(1));
+    } else if (selectedIndex === selectedTasks.length - 1) {
+      newSelected = newSelected.concat(selectedTasks.slice(0, -1));
+    } else if (selectedIndex > 0) {
+      newSelected = newSelected.concat(
+        selectedTasks.slice(0, selectedIndex),
+        selectedTasks.slice(selectedIndex + 1),
+      );
+    }
+
+    setSelectedTasks(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer ${selectedTasks.length} tâches ?`)) return;
+
+    setLoading(true);
+    try {
+      await Promise.all(selectedTasks.map(id => taskService.deleteTask(id)));
+      setSelectedTasks([]);
+      loadTasks(pagination.currentPage);
+    } catch (err) {
+      alert('Erreur lors de la suppression en masse');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkStatusChange = async (newStatus) => {
+    if (!newStatus) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedTasks.map(async (id) => {
+        const task = tasks.find(t => t.id === id);
+        if (task) {
+          return taskService.updateTask(id, { ...task, status: newStatus });
+        }
+        return Promise.resolve();
+      }));
+      setSelectedTasks([]);
+      loadTasks(pagination.currentPage);
+    } catch (err) {
+      alert('Erreur lors de la mise à jour en masse');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkAssign = async (email) => {
+    if (!email) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedTasks.map(async (id) => {
+        const task = tasks.find(t => t.id === id);
+        if (task) {
+          const currentAssignees = assigneeToArray(task.assignee);
+          if (!currentAssignees.includes(email)) {
+            const newAssignees = [...currentAssignees, email];
+            return taskService.updateTask(id, { ...task, assignee: arrayToAssignee(newAssignees) });
+          }
+        }
+        return Promise.resolve();
+      }));
+      setSelectedTasks([]);
+      loadTasks(pagination.currentPage);
+    } catch (err) {
+      alert('Erreur lors de l\'assignation en masse');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isSelected = (id) => selectedTasks.indexOf(id) !== -1;
 
   const updateURLWithFilters = (statuses, project) => {
     const params = {};
@@ -771,8 +884,8 @@ const TasksPage = () => {
                   {statusFilter.length === 0
                     ? 'Filtrer par statut'
                     : statusFilter.length === 1
-                    ? statusOptions.find(opt => opt.value === statusFilter[0])?.label
-                    : `${statusFilter.length} statuts sélectionnés`}
+                      ? statusOptions.find(opt => opt.value === statusFilter[0])?.label
+                      : `${statusFilter.length} statuts sélectionnés`}
                 </Box>
               </Button>
               <Menu
@@ -893,6 +1006,83 @@ const TasksPage = () => {
 
       {error && <ErrorMessage message={error} onRetry={() => loadTasks(pagination.currentPage)} />}
 
+      {/* Barre d'actions en masse */}
+      {selectedTasks.length > 0 && (
+        <Paper
+          elevation={3}
+          sx={{
+            p: 2,
+            mb: 2,
+            borderRadius: 3,
+            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Typography variant="subtitle1" fontWeight={600} color="primary">
+              {selectedTasks.length} sélectionné(s)
+            </Typography>
+            <Tooltip title="Tout désélectionner">
+              <IconButton size="small" onClick={() => setSelectedTasks([])}>
+                <CloseIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+
+          <Stack direction="row" spacing={2} alignItems="center">
+            <FormControl size="small" sx={{ minWidth: 150, backgroundColor: 'background.paper', borderRadius: 1 }}>
+              <Select
+                value=""
+                displayEmpty
+                onChange={(e) => handleBulkStatusChange(e.target.value)}
+                sx={{ borderRadius: 1 }}
+              >
+                <MenuItem value="" disabled>
+                  Changer statut...
+                </MenuItem>
+                {statusOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 150, backgroundColor: 'background.paper', borderRadius: 1 }}>
+              <Select
+                value=""
+                displayEmpty
+                onChange={(e) => handleBulkAssign(e.target.value)}
+                sx={{ borderRadius: 1 }}
+              >
+                <MenuItem value="" disabled>
+                  Assigner à...
+                </MenuItem>
+                {persons.map((person) => (
+                  <MenuItem key={person.id} value={person.email}>
+                    {person.firstName} {person.lastName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleBulkDelete}
+              sx={{ borderRadius: 2 }}
+            >
+              Supprimer
+            </Button>
+          </Stack>
+        </Paper>
+      )}
+
       {/* Tableau des tâches */}
       <TableContainer
         component={Paper}
@@ -906,6 +1096,17 @@ const TasksPage = () => {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  color="primary"
+                  indeterminate={selectedTasks.length > 0 && selectedTasks.length < tasks.length}
+                  checked={tasks.length > 0 && selectedTasks.length === tasks.length}
+                  onChange={handleSelectAll}
+                  inputProps={{
+                    'aria-label': 'select all tasks',
+                  }}
+                />
+              </TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Projet</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Assignés</TableCell>
@@ -916,189 +1117,213 @@ const TasksPage = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {tasks.map((task) => (
-              <TableRow
-                key={task.id}
-                sx={{
-                  '&:hover': {
-                    backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                  },
-                  transition: 'background-color 0.2s',
-                }}
-              >
-                <TableCell>
-                  <Typography variant="body1" fontWeight={500}>
-                    {task.title}
-                  </Typography>
-                  {task.trackingReference && (
-                    <Typography variant="caption" color="text.secondary">
-                      {task.trackingReference}
+            {tasks.map((task) => {
+              const isItemSelected = isSelected(task.id);
+              return (
+                <TableRow
+                  key={task.id}
+                  hover
+                  onClick={(event) => handleSelectTask(event, task.id)}
+                  role="checkbox"
+                  aria-checked={isItemSelected}
+                  selected={isItemSelected}
+                  sx={{
+                    cursor: 'pointer',
+                    '&.Mui-selected': {
+                      backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                    },
+                    '&.Mui-selected:hover': {
+                      backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                    },
+                    '&:hover': {
+                      backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                    },
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      color="primary"
+                      checked={isItemSelected}
+                      inputProps={{
+                        'aria-labelledby': `enhanced-table-checkbox-${task.id}`,
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body1" fontWeight={500}>
+                      {task.title}
                     </Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <Select
-                      value={task.projectCode || ''}
-                      onChange={(e) => handleProjectChange(task.id, e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      sx={{ borderRadius: 2 }}
-                    >
-                      <MenuItem value="">Aucun projet</MenuItem>
-                      {projects.map((project) => (
-                        <MenuItem key={project.id} value={project.projectCode}>
-                          {project.projectCode} - {project.projectName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                    {(() => {
-                      const assigneesArray = assigneeToArray(task.assignee);
-                      const names = getAssigneesNames(assigneesArray);
-                      return names.map((name, index) => {
-                        const email = assigneesArray[index];
-                        return (
-                          <Chip
-                            key={email}
-                            label={name}
-                            size="small"
-                            onDelete={() => handleRemoveAssignee(task.id, email)}
-                            icon={<PersonIcon />}
-                            sx={{
-                              borderRadius: 2,
-                              '& .MuiChip-deleteIcon': {
-                                fontSize: '1rem',
-                              },
-                            }}
-                          />
-                        );
-                      });
-                    })()}
-                    {(!task.assignee || task.assignee.length === 0) && (
+                    {task.trackingReference && (
                       <Typography variant="caption" color="text.secondary">
-                        Non assigné
+                        {task.trackingReference}
                       </Typography>
                     )}
-                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                  </TableCell>
+                  <TableCell>
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
                       <Select
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleAddAssignee(task.id, e.target.value);
-                          }
-                        }}
+                        value={task.projectCode || ''}
+                        onChange={(e) => handleProjectChange(task.id, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        displayEmpty
                         sx={{ borderRadius: 2 }}
                       >
-                        <MenuItem value="" disabled>
-                          + Assigner
-                        </MenuItem>
-                        {persons
-                          .filter(p => !assigneeToArray(task.assignee).includes(p.email))
-                          .map((person) => (
-                            <MenuItem key={person.id} value={person.email}>
-                              {person.firstName} {person.lastName}
-                            </MenuItem>
-                          ))}
+                        <MenuItem value="">Aucun projet</MenuItem>
+                        {projects.map((project) => (
+                          <MenuItem key={project.id} value={project.projectCode}>
+                            {project.projectCode} - {project.projectName}
+                          </MenuItem>
+                        ))}
                       </Select>
                     </FormControl>
-                  </Stack>
-                </TableCell>
-                <TableCell>
-                  <FormControl size="small" sx={{ minWidth: 160 }}>
-                    <Select
-                      value={task.status || ''}
-                      onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      sx={{ borderRadius: 2 }}
-                      renderValue={(value) => {
-                        const statusInfo = getStatusInfo(value);
-                        return (
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Box sx={{ color: `${statusInfo.color}.main`, display: 'flex', alignItems: 'center' }}>
-                              {statusInfo.icon}
-                            </Box>
-                            <Typography variant="body2" fontWeight={500}>
-                              {statusInfo.label}
-                            </Typography>
-                          </Stack>
-                        );
-                      }}
-                    >
-                      <MenuItem value="">
-                        <Typography variant="body2" color="text.secondary">
-                          Aucun statut
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                      {(() => {
+                        const assigneesArray = assigneeToArray(task.assignee);
+                        const names = getAssigneesNames(assigneesArray);
+                        return names.map((name, index) => {
+                          const email = assigneesArray[index];
+                          return (
+                            <Chip
+                              key={email}
+                              label={name}
+                              size="small"
+                              onDelete={() => handleRemoveAssignee(task.id, email)}
+                              icon={<PersonIcon />}
+                              sx={{
+                                borderRadius: 2,
+                                '& .MuiChip-deleteIcon': {
+                                  fontSize: '1rem',
+                                },
+                              }}
+                            />
+                          );
+                        });
+                      })()}
+                      {(!task.assignee || task.assignee.length === 0) && (
+                        <Typography variant="caption" color="text.secondary">
+                          Non assigné
                         </Typography>
-                      </MenuItem>
-                      {statusOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          <Stack direction="row" spacing={1.5} alignItems="center">
-                            <Box sx={{ color: `${option.color}.main`, display: 'flex', alignItems: 'center' }}>
-                              {option.icon}
-                            </Box>
-                            <Typography variant="body2" fontWeight={500}>
-                              {option.label}
-                            </Typography>
-                          </Stack>
-                        </MenuItem>
-                      ))}
-                      {task.status && !statusOptions.find(opt => opt.value === task.status) && (
-                        <MenuItem value={task.status}>
-                          <Typography variant="body2">
-                            {task.status}
+                      )}
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <Select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAddAssignee(task.id, e.target.value);
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          displayEmpty
+                          sx={{ borderRadius: 2 }}
+                        >
+                          <MenuItem value="" disabled>
+                            + Assigner
+                          </MenuItem>
+                          {persons
+                            .filter(p => !assigneeToArray(task.assignee).includes(p.email))
+                            .map((person) => (
+                              <MenuItem key={person.id} value={person.email}>
+                                {person.firstName} {person.lastName}
+                              </MenuItem>
+                            ))}
+                        </Select>
+                      </FormControl>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <FormControl size="small" sx={{ minWidth: 160 }}>
+                      <Select
+                        value={task.status || ''}
+                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{ borderRadius: 2 }}
+                        renderValue={(value) => {
+                          const statusInfo = getStatusInfo(value);
+                          return (
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Box sx={{ color: `${statusInfo.color}.main`, display: 'flex', alignItems: 'center' }}>
+                                {statusInfo.icon}
+                              </Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                {statusInfo.label}
+                              </Typography>
+                            </Stack>
+                          );
+                        }}
+                      >
+                        <MenuItem value="">
+                          <Typography variant="body2" color="text.secondary">
+                            Aucun statut
                           </Typography>
                         </MenuItem>
-                      )}
-                    </Select>
-                  </FormControl>
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                    <Typography variant="body2">{formatDate(task.deadLine)}</Typography>
-                  </Stack>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">{task.estimate || '-'}</Typography>
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1} justifyContent="center">
-                    <Tooltip title="Éditer">
-                      <IconButton
-                        onClick={() => handleEditTask(task)}
-                        color="primary"
-                        size="small"
-                        sx={{
-                          '&:hover': {
-                            backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                          },
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Supprimer">
-                      <IconButton
-                        onClick={() => handleDeleteTask(task.id)}
-                        color="error"
-                        size="small"
-                        sx={{
-                          '&:hover': {
-                            backgroundColor: alpha(theme.palette.error.main, 0.1),
-                          },
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
+                        {statusOptions.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            <Stack direction="row" spacing={1.5} alignItems="center">
+                              <Box sx={{ color: `${option.color}.main`, display: 'flex', alignItems: 'center' }}>
+                                {option.icon}
+                              </Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                {option.label}
+                              </Typography>
+                            </Stack>
+                          </MenuItem>
+                        ))}
+                        {task.status && !statusOptions.find(opt => opt.value === task.status) && (
+                          <MenuItem value={task.status}>
+                            <Typography variant="body2">
+                              {task.status}
+                            </Typography>
+                          </MenuItem>
+                        )}
+                      </Select>
+                    </FormControl>
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                      <Typography variant="body2">{formatDate(task.deadLine)}</Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{task.estimate || '-'}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} justifyContent="center">
+                      <Tooltip title="Éditer">
+                        <IconButton
+                          onClick={() => handleEditTask(task)}
+                          color="primary"
+                          size="small"
+                          sx={{
+                            '&:hover': {
+                              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                            },
+                          }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Supprimer">
+                        <IconButton
+                          onClick={() => handleDeleteTask(task.id)}
+                          color="error"
+                          size="small"
+                          sx={{
+                            '&:hover': {
+                              backgroundColor: alpha(theme.palette.error.main, 0.1),
+                            },
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
 
