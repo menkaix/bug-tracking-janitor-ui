@@ -30,6 +30,8 @@ import {
   Tooltip,
   alpha,
   useTheme,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -50,6 +52,8 @@ import {
   FactCheck as FactCheckIcon,
   Science as ScienceIcon,
   RemoveDone as RemoveDoneIcon,
+  ViewList as ViewListIcon,
+  ViewKanban as ViewKanbanIcon,
 } from '@mui/icons-material';
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
@@ -57,6 +61,7 @@ import personService from '../services/person.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
+import KanbanBoard from '../components/Tasks/KanbanBoard';
 import { format } from 'date-fns';
 
 /**
@@ -107,6 +112,7 @@ const TasksPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedTasks, setSelectedTasks] = useState([]);
+  const [viewMode, setViewMode] = useState(0); // 0 = Liste, 1 = Kanban
 
   const [formData, setFormData] = useState({
     title: '',
@@ -136,9 +142,12 @@ const TasksPage = () => {
     setError('');
 
     try {
-      const pageSize = size !== null ? size : pagination.size;
+      // En mode Kanban, charger toutes les tâches (pas de pagination)
+      const isKanbanMode = viewMode === 1;
+      const pageSize = isKanbanMode ? 1000 : (size !== null ? size : pagination.size);
+      const currentPage = isKanbanMode ? 0 : page;
 
-      console.log('loadTasks called with:', { page, size, statusFilter, projectFilter, assigneeFilter, searchTerm });
+      console.log('loadTasks called with:', { page: currentPage, size: pageSize, statusFilter, projectFilter, assigneeFilter, searchTerm, isKanbanMode });
 
       // Si plusieurs status sont sélectionnés, faire plusieurs requêtes et combiner les résultats
       if (statusFilter.length > 0) {
@@ -208,18 +217,31 @@ const TasksPage = () => {
 
         // Pagination côté client
         const totalElements = filteredTasks.length;
-        const totalPages = Math.ceil(totalElements / pageSize);
-        const startIndex = page * pageSize;
-        const endIndex = startIndex + pageSize;
-        const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
 
-        setTasks(paginatedTasks);
-        setPagination({
-          currentPage: page,
-          totalPages: totalPages,
-          totalElements: totalElements,
-          size: pageSize,
-        });
+        if (isKanbanMode) {
+          // En mode Kanban, afficher toutes les tâches sans pagination
+          setTasks(filteredTasks);
+          setPagination({
+            currentPage: 0,
+            totalPages: 1,
+            totalElements: totalElements,
+            size: totalElements,
+          });
+        } else {
+          // En mode Liste, paginer les résultats
+          const totalPages = Math.ceil(totalElements / pageSize);
+          const startIndex = currentPage * pageSize;
+          const endIndex = startIndex + pageSize;
+          const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
+
+          setTasks(paginatedTasks);
+          setPagination({
+            currentPage: currentPage,
+            totalPages: totalPages,
+            totalElements: totalElements,
+            size: pageSize,
+          });
+        }
       } else {
         // Aucun filtre de statut
         if (projectFilter === 'no-project') {
@@ -242,18 +264,29 @@ const TasksPage = () => {
 
             // Pagination côté client
             const totalElements = noProjectTasks.length;
-            const totalPages = Math.ceil(totalElements / pageSize);
-            const startIndex = page * pageSize;
-            const endIndex = startIndex + pageSize;
-            const paginatedTasks = noProjectTasks.slice(startIndex, endIndex);
 
-            setTasks(paginatedTasks);
-            setPagination({
-              currentPage: page,
-              totalPages: totalPages,
-              totalElements: totalElements,
-              size: pageSize,
-            });
+            if (isKanbanMode) {
+              setTasks(noProjectTasks);
+              setPagination({
+                currentPage: 0,
+                totalPages: 1,
+                totalElements: totalElements,
+                size: totalElements,
+              });
+            } else {
+              const totalPages = Math.ceil(totalElements / pageSize);
+              const startIndex = currentPage * pageSize;
+              const endIndex = startIndex + pageSize;
+              const paginatedTasks = noProjectTasks.slice(startIndex, endIndex);
+
+              setTasks(paginatedTasks);
+              setPagination({
+                currentPage: currentPage,
+                totalPages: totalPages,
+                totalElements: totalElements,
+                size: pageSize,
+              });
+            }
           } else {
             setError(result.error || 'Impossible de charger les tâches');
           }
@@ -277,47 +310,70 @@ const TasksPage = () => {
 
               // Pagination côté client
               const totalElements = allTasks.length;
-              const totalPages = Math.ceil(totalElements / pageSize);
-              const startIndex = page * pageSize;
-              const endIndex = startIndex + pageSize;
-              const paginatedTasks = allTasks.slice(startIndex, endIndex);
 
-              setTasks(paginatedTasks);
-              setPagination({
-                currentPage: page,
-                totalPages: totalPages,
-                totalElements: totalElements,
-                size: pageSize,
-              });
+              if (isKanbanMode) {
+                setTasks(allTasks);
+                setPagination({
+                  currentPage: 0,
+                  totalPages: 1,
+                  totalElements: totalElements,
+                  size: totalElements,
+                });
+              } else {
+                const totalPages = Math.ceil(totalElements / pageSize);
+                const startIndex = currentPage * pageSize;
+                const endIndex = startIndex + pageSize;
+                const paginatedTasks = allTasks.slice(startIndex, endIndex);
+
+                setTasks(paginatedTasks);
+                setPagination({
+                  currentPage: currentPage,
+                  totalPages: totalPages,
+                  totalElements: totalElements,
+                  size: pageSize,
+                });
+              }
             } else {
               setError(result.error || 'Impossible de charger les tâches');
             }
           } else {
-            // Aucun filtre assignee, pagination normale via l'API
-            const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
+            // Aucun filtre assignee, pagination normale via l'API (ou toutes les tâches en mode Kanban)
+            const result = await taskService.getAllTasks(currentPage, pageSize, searchTerm, filter);
 
             if (result.success) {
-              setTasks(result.data.content || []);
+              const allTasks = result.data.content || [];
 
-              const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
-              const apiTotalPages = result.data.totalPages ?? 0;
-              const apiTotalElements = result.data.totalElements ?? 0;
-              const apiPageSize = result.data.size ?? pageSize;
+              if (isKanbanMode) {
+                setTasks(allTasks);
+                setPagination({
+                  currentPage: 0,
+                  totalPages: 1,
+                  totalElements: allTasks.length,
+                  size: allTasks.length,
+                });
+              } else {
+                setTasks(allTasks);
 
-              console.log('Pagination data from API:', {
-                apiCurrentPage,
-                apiTotalPages,
-                apiTotalElements,
-                apiPageSize,
-                rawData: result.data
-              });
+                const apiCurrentPage = result.data.number ?? result.data.currentPage ?? currentPage;
+                const apiTotalPages = result.data.totalPages ?? 0;
+                const apiTotalElements = result.data.totalElements ?? 0;
+                const apiPageSize = result.data.size ?? pageSize;
 
-              setPagination({
-                currentPage: apiCurrentPage,
-                totalPages: apiTotalPages,
-                totalElements: apiTotalElements,
-                size: apiPageSize,
-              });
+                console.log('Pagination data from API:', {
+                  apiCurrentPage,
+                  apiTotalPages,
+                  apiTotalElements,
+                  apiPageSize,
+                  rawData: result.data
+                });
+
+                setPagination({
+                  currentPage: apiCurrentPage,
+                  totalPages: apiTotalPages,
+                  totalElements: apiTotalElements,
+                  size: apiPageSize,
+                });
+              }
             } else {
               setError(result.error || 'Impossible de charger les tâches');
             }
@@ -358,7 +414,7 @@ const TasksPage = () => {
     }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line
-  }, [searchTerm, statusFilter, projectFilter, assigneeFilter]);
+  }, [searchTerm, statusFilter, projectFilter, assigneeFilter, viewMode]);
 
   const handlePageChange = (page) => {
     // Validation des limites de page
@@ -835,6 +891,42 @@ const TasksPage = () => {
         </Button>
       </Box>
 
+      {/* Onglets de vue */}
+      <Paper
+        sx={{
+          mb: 3,
+          borderRadius: 3,
+          boxShadow: 2,
+          overflow: 'hidden',
+        }}
+      >
+        <Tabs
+          value={viewMode}
+          onChange={(e, newValue) => setViewMode(newValue)}
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            '& .MuiTab-root': {
+              minHeight: 56,
+              fontWeight: 500,
+            },
+          }}
+        >
+          <Tab
+            icon={<ViewListIcon />}
+            iconPosition="start"
+            label="Liste"
+            sx={{ px: 4 }}
+          />
+          <Tab
+            icon={<ViewKanbanIcon />}
+            iconPosition="start"
+            label="Kanban"
+            sx={{ px: 4 }}
+          />
+        </Tabs>
+      </Paper>
+
       {/* Barre de filtres et recherche */}
       <Paper
         sx={{
@@ -1220,8 +1312,11 @@ const TasksPage = () => {
 
       {error && <ErrorMessage message={error} onRetry={() => loadTasks(pagination.currentPage)} />}
 
-      {/* Barre d'actions en masse */}
-      {selectedTasks.length > 0 && (
+      {/* Vue Liste */}
+      {viewMode === 0 && (
+        <>
+          {/* Barre d'actions en masse */}
+          {selectedTasks.length > 0 && (
         <Paper
           elevation={3}
           sx={{
@@ -1550,15 +1645,31 @@ const TasksPage = () => {
           </Box>
         )}
       </TableContainer>
+        </>
+      )}
 
-      <Pagination
+      {/* Vue Kanban */}
+      {viewMode === 1 && (
+        <KanbanBoard
+          tasks={tasks}
+          persons={persons}
+          onEditTask={handleEditTask}
+          onDeleteTask={handleDeleteTask}
+          onStatusChange={handleStatusChange}
+        />
+      )}
+
+      {/* Pagination (commune aux deux vues) */}
+      {viewMode === 0 && (
+        <Pagination
         currentPage={pagination.currentPage}
         totalPages={pagination.totalPages}
         totalElements={pagination.totalElements}
         pageSize={pagination.size}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
-      />
+        />
+      )}
 
       {/* Modal de création/édition */}
       <Dialog
