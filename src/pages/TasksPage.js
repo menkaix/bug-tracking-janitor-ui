@@ -92,6 +92,18 @@ const TasksPage = () => {
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter());
   const [statusFilterAnchorEl, setStatusFilterAnchorEl] = useState(null);
 
+  // Initialiser assigneeFilter depuis l'URL si présent (format: assignee=email1,email2)
+  const initialAssigneeFilter = () => {
+    const assigneeParam = searchParams.get('assignee');
+    if (assigneeParam) {
+      return assigneeParam.split(',').map(a => a.trim()).filter(a => a.length > 0);
+    }
+    return [];
+  };
+
+  const [assigneeFilter, setAssigneeFilter] = useState(initialAssigneeFilter());
+  const [assigneeFilterAnchorEl, setAssigneeFilterAnchorEl] = useState(null);
+
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedTasks, setSelectedTasks] = useState([]);
@@ -126,7 +138,7 @@ const TasksPage = () => {
     try {
       const pageSize = size !== null ? size : pagination.size;
 
-      console.log('loadTasks called with:', { page, size, statusFilter, projectFilter, searchTerm });
+      console.log('loadTasks called with:', { page, size, statusFilter, projectFilter, assigneeFilter, searchTerm });
 
       // Si plusieurs status sont sélectionnés, faire plusieurs requêtes et combiner les résultats
       if (statusFilter.length > 0) {
@@ -184,6 +196,16 @@ const TasksPage = () => {
         }
         console.log('Tâches après filtre projet:', filteredTasks.length);
 
+        // Filtrer par assignee côté client
+        if (assigneeFilter.length > 0) {
+          filteredTasks = filteredTasks.filter(task => {
+            const taskAssignees = assigneeToArray(task.assignee);
+            // Vérifier si au moins un des assignees sélectionnés est dans la tâche
+            return assigneeFilter.some(email => taskAssignees.includes(email));
+          });
+        }
+        console.log('Tâches après filtre assignee:', filteredTasks.length);
+
         // Pagination côté client
         const totalElements = filteredTasks.length;
         const totalPages = Math.ceil(totalElements / pageSize);
@@ -206,8 +228,17 @@ const TasksPage = () => {
 
           if (result.success) {
             const allTasks = result.data.content || [];
-            const noProjectTasks = allTasks.filter(task => !task.projectCode || task.projectCode === '');
+            let noProjectTasks = allTasks.filter(task => !task.projectCode || task.projectCode === '');
             console.log('Tâches sans projet:', noProjectTasks.length);
+
+            // Filtrer par assignee côté client
+            if (assigneeFilter.length > 0) {
+              noProjectTasks = noProjectTasks.filter(task => {
+                const taskAssignees = assigneeToArray(task.assignee);
+                return assigneeFilter.some(email => taskAssignees.includes(email));
+              });
+            }
+            console.log('Tâches après filtre assignee:', noProjectTasks.length);
 
             // Pagination côté client
             const totalElements = noProjectTasks.length;
@@ -229,32 +260,67 @@ const TasksPage = () => {
         } else {
           // Requête normale avec filtre de projet si présent
           const filter = projectFilter ? `projectCode:${projectFilter}` : '';
-          const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
 
-          if (result.success) {
-            setTasks(result.data.content || []);
+          // Si le filtre assignee est actif, récupérer toutes les tâches pour filtrer côté client
+          if (assigneeFilter.length > 0) {
+            const result = await taskService.getAllTasks(0, 1000, searchTerm, filter);
 
-            const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
-            const apiTotalPages = result.data.totalPages ?? 0;
-            const apiTotalElements = result.data.totalElements ?? 0;
-            const apiPageSize = result.data.size ?? pageSize;
+            if (result.success) {
+              let allTasks = result.data.content || [];
 
-            console.log('Pagination data from API:', {
-              apiCurrentPage,
-              apiTotalPages,
-              apiTotalElements,
-              apiPageSize,
-              rawData: result.data
-            });
+              // Filtrer par assignee côté client
+              allTasks = allTasks.filter(task => {
+                const taskAssignees = assigneeToArray(task.assignee);
+                return assigneeFilter.some(email => taskAssignees.includes(email));
+              });
+              console.log('Tâches après filtre assignee:', allTasks.length);
 
-            setPagination({
-              currentPage: apiCurrentPage,
-              totalPages: apiTotalPages,
-              totalElements: apiTotalElements,
-              size: apiPageSize,
-            });
+              // Pagination côté client
+              const totalElements = allTasks.length;
+              const totalPages = Math.ceil(totalElements / pageSize);
+              const startIndex = page * pageSize;
+              const endIndex = startIndex + pageSize;
+              const paginatedTasks = allTasks.slice(startIndex, endIndex);
+
+              setTasks(paginatedTasks);
+              setPagination({
+                currentPage: page,
+                totalPages: totalPages,
+                totalElements: totalElements,
+                size: pageSize,
+              });
+            } else {
+              setError(result.error || 'Impossible de charger les tâches');
+            }
           } else {
-            setError(result.error || 'Impossible de charger les tâches');
+            // Aucun filtre assignee, pagination normale via l'API
+            const result = await taskService.getAllTasks(page, pageSize, searchTerm, filter);
+
+            if (result.success) {
+              setTasks(result.data.content || []);
+
+              const apiCurrentPage = result.data.number ?? result.data.currentPage ?? page;
+              const apiTotalPages = result.data.totalPages ?? 0;
+              const apiTotalElements = result.data.totalElements ?? 0;
+              const apiPageSize = result.data.size ?? pageSize;
+
+              console.log('Pagination data from API:', {
+                apiCurrentPage,
+                apiTotalPages,
+                apiTotalElements,
+                apiPageSize,
+                rawData: result.data
+              });
+
+              setPagination({
+                currentPage: apiCurrentPage,
+                totalPages: apiTotalPages,
+                totalElements: apiTotalElements,
+                size: apiPageSize,
+              });
+            } else {
+              setError(result.error || 'Impossible de charger les tâches');
+            }
           }
         }
       }
@@ -292,7 +358,7 @@ const TasksPage = () => {
     }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line
-  }, [searchTerm, statusFilter, projectFilter]);
+  }, [searchTerm, statusFilter, projectFilter, assigneeFilter]);
 
   const handlePageChange = (page) => {
     // Validation des limites de page
@@ -603,7 +669,7 @@ const TasksPage = () => {
       console.log('New statusFilter:', newFilter);
 
       // Mettre à jour l'URL
-      updateURLWithFilters(newFilter, projectFilter);
+      updateURLWithFilters(newFilter, projectFilter, assigneeFilter);
 
       return newFilter;
     });
@@ -612,7 +678,28 @@ const TasksPage = () => {
   const clearStatusFilter = () => {
     setStatusFilter([]);
     // Mettre à jour l'URL
-    updateURLWithFilters([], projectFilter);
+    updateURLWithFilters([], projectFilter, assigneeFilter);
+  };
+
+  const toggleAssigneeFilter = (email) => {
+    console.log('toggleAssigneeFilter called with:', email);
+    setAssigneeFilter(prev => {
+      const newFilter = prev.includes(email)
+        ? prev.filter(a => a !== email)
+        : [...prev, email];
+      console.log('New assigneeFilter:', newFilter);
+
+      // Mettre à jour l'URL
+      updateURLWithFilters(statusFilter, projectFilter, newFilter);
+
+      return newFilter;
+    });
+  };
+
+  const clearAssigneeFilter = () => {
+    setAssigneeFilter([]);
+    // Mettre à jour l'URL
+    updateURLWithFilters(statusFilter, projectFilter, []);
   };
 
   const handleSelectAll = (event) => {
@@ -704,13 +791,16 @@ const TasksPage = () => {
 
   const isSelected = (id) => selectedTasks.indexOf(id) !== -1;
 
-  const updateURLWithFilters = (statuses, project) => {
+  const updateURLWithFilters = (statuses, project, assignees) => {
     const params = {};
     if (statuses.length > 0) {
       params.status = statuses.join(',');
     }
     if (project) {
       params.projectCode = project;
+    }
+    if (assignees && assignees.length > 0) {
+      params.assignee = assignees.join(',');
     }
     setSearchParams(params);
   };
@@ -803,7 +893,7 @@ const TasksPage = () => {
                 onChange={(e) => {
                   const newProjectCode = e.target.value;
                   setProjectFilter(newProjectCode);
-                  updateURLWithFilters(statusFilter, newProjectCode);
+                  updateURLWithFilters(statusFilter, newProjectCode, assigneeFilter);
                 }}
                 label="Projet"
                 sx={{
@@ -950,10 +1040,119 @@ const TasksPage = () => {
                 ))}
               </Menu>
             </Box>
+
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 50%' } }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<PersonIcon />}
+                endIcon={
+                  assigneeFilter.length > 0 && (
+                    <Chip
+                      label={assigneeFilter.length}
+                      size="small"
+                      color="primary"
+                      sx={{
+                        height: 20,
+                        minWidth: 20,
+                        '& .MuiChip-label': { px: 0.75 }
+                      }}
+                    />
+                  )
+                }
+                onClick={(e) => setAssigneeFilterAnchorEl(e.currentTarget)}
+                sx={{
+                  height: 56,
+                  borderRadius: 2,
+                  justifyContent: 'space-between',
+                  px: 2,
+                  backgroundColor: 'background.paper',
+                  borderColor: assigneeFilter.length > 0 ? 'primary.main' : 'divider',
+                  borderWidth: assigneeFilter.length > 0 ? 2 : 1,
+                  fontWeight: assigneeFilter.length > 0 ? 600 : 400,
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                    borderWidth: assigneeFilter.length > 0 ? 2 : 1,
+                    boxShadow: 1,
+                  },
+                }}
+              >
+                <Box component="span" sx={{ flex: 1, textAlign: 'left' }}>
+                  {assigneeFilter.length === 0
+                    ? 'Filtrer par assigné'
+                    : assigneeFilter.length === 1
+                      ? (() => {
+                          const person = persons.find(p => p.email === assigneeFilter[0]);
+                          return person ? `${person.firstName} ${person.lastName}` : assigneeFilter[0];
+                        })()
+                      : `${assigneeFilter.length} assignés sélectionnés`}
+                </Box>
+              </Button>
+              <Menu
+                anchorEl={assigneeFilterAnchorEl}
+                open={Boolean(assigneeFilterAnchorEl)}
+                onClose={() => setAssigneeFilterAnchorEl(null)}
+                PaperProps={{
+                  sx: {
+                    borderRadius: 2,
+                    minWidth: 280,
+                    mt: 1,
+                    boxShadow: 4,
+                  },
+                }}
+              >
+                <Box sx={{
+                  px: 2,
+                  py: 1.5,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                }}>
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Filtrer par assigné
+                  </Typography>
+                  {assigneeFilter.length > 0 && (
+                    <Button
+                      size="small"
+                      onClick={clearAssigneeFilter}
+                      sx={{ minWidth: 'auto' }}
+                    >
+                      Effacer
+                    </Button>
+                  )}
+                </Box>
+                {persons.map((person) => (
+                  <MenuItem
+                    key={person.id}
+                    onClick={() => toggleAssigneeFilter(person.email)}
+                    sx={{
+                      py: 1.5,
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                      },
+                    }}
+                  >
+                    <Checkbox
+                      checked={assigneeFilter.includes(person.email)}
+                      sx={{ mr: 1 }}
+                    />
+                    <Chip
+                      icon={<PersonIcon />}
+                      label={`${person.firstName} ${person.lastName}`}
+                      size="small"
+                      sx={{ fontWeight: 500 }}
+                    />
+                  </MenuItem>
+                ))}
+              </Menu>
+            </Box>
           </Stack>
 
           {/* Indicateurs de filtres actifs */}
-          {(searchTerm || projectFilter || statusFilter.length > 0) && (
+          {(searchTerm || projectFilter || statusFilter.length > 0 || assigneeFilter.length > 0) && (
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               <Typography variant="caption" color="text.secondary" fontWeight={600}>
                 Filtres actifs :
@@ -978,7 +1177,7 @@ const TasksPage = () => {
                   size="small"
                   onDelete={() => {
                     setProjectFilter('');
-                    updateURLWithFilters(statusFilter, '');
+                    updateURLWithFilters(statusFilter, '', assigneeFilter);
                   }}
                   color="primary"
                   variant="outlined"
@@ -995,6 +1194,21 @@ const TasksPage = () => {
                     icon={statusInfo.icon}
                     onDelete={() => toggleStatusFilter(status)}
                     color={statusInfo.color}
+                    variant="outlined"
+                  />
+                );
+              })}
+              {assigneeFilter.map(email => {
+                const person = persons.find(p => p.email === email);
+                const name = person ? `${person.firstName} ${person.lastName}` : email;
+                return (
+                  <Chip
+                    key={email}
+                    label={`Assigné: ${name}`}
+                    size="small"
+                    icon={<PersonIcon />}
+                    onDelete={() => toggleAssigneeFilter(email)}
+                    color="primary"
                     variant="outlined"
                   />
                 );
