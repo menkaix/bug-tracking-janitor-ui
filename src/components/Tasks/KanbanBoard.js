@@ -281,25 +281,11 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
   // Définition des colonnes
   const columns = [
     {
-      id: 'todo',
-      label: 'À faire',
-      color: 'secondary',
-      icon: <AssignmentIcon fontSize="small" />,
-      statusValues: ['todo'],
-    },
-    {
-      id: 'pending',
-      label: 'En attente',
-      color: 'warning',
-      icon: <PendingIcon fontSize="small" />,
-      statusValues: ['pending'],
-    },
-    {
-      id: 'in-progress',
-      label: 'En cours',
-      color: 'info',
-      icon: <ScheduleIcon fontSize="small" />,
-      statusValues: ['in-progress'],
+      id: 'others',
+      label: 'Autres',
+      color: 'default',
+      icon: <MoreHorizIcon fontSize="small" />,
+      statusValues: ['no-status', 'other'], // Sera calculé dynamiquement
     },
     {
       id: 'to-study',
@@ -307,6 +293,20 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
       color: 'default',
       icon: <PsychologyIcon fontSize="small" />,
       statusValues: ['to-study'],
+    },
+    {
+      id: 'todo',
+      label: 'À faire',
+      color: 'secondary',
+      icon: <AssignmentIcon fontSize="small" />,
+      statusValues: ['todo'],
+    },
+    {
+      id: 'in-progress',
+      label: 'En cours',
+      color: 'info',
+      icon: <ScheduleIcon fontSize="small" />,
+      statusValues: ['in-progress'],
     },
     {
       id: 'to-test',
@@ -323,18 +323,18 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
       statusValues: ['done'],
     },
     {
+      id: 'pending',
+      label: 'En attente',
+      color: 'warning',
+      icon: <PendingIcon fontSize="small" />,
+      statusValues: ['pending'],
+    },
+    {
       id: 'canceled',
       label: 'Annulé',
       color: 'error',
       icon: <BlockIcon fontSize="small" />,
       statusValues: ['canceled'],
-    },
-    {
-      id: 'others',
-      label: 'Autres',
-      color: 'default',
-      icon: <MoreHorizIcon fontSize="small" />,
-      statusValues: ['no-status', 'other'], // Sera calculé dynamiquement
     },
   ];
 

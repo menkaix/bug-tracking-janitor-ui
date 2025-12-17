@@ -65,6 +65,37 @@ import KanbanBoard from '../components/Tasks/KanbanBoard';
 import { format } from 'date-fns';
 
 /**
+ * Clé pour le localStorage
+ */
+const STORAGE_KEY = 'tasksPagePreferences';
+
+/**
+ * Charger les préférences depuis localStorage
+ */
+const loadPreferences = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement des préférences:', error);
+  }
+  return null;
+};
+
+/**
+ * Sauvegarder les préférences dans localStorage
+ */
+const savePreferences = (preferences) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+  } catch (error) {
+    console.error('Erreur lors de la sauvegarde des préférences:', error);
+  }
+};
+
+/**
  * Page de gestion des tâches - Material UI 2025
  */
 const TasksPage = () => {
@@ -81,29 +112,37 @@ const TasksPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
 
-  const [projectFilter, setProjectFilter] = useState(searchParams.get('projectCode') || '');
+  // Charger les préférences sauvegardées
+  const savedPreferences = loadPreferences();
 
-  // Initialiser statusFilter depuis l'URL si présent (format: status=todo,pending,in-progress)
+  // Initialiser searchTerm depuis localStorage ou vide
+  const [searchTerm, setSearchTerm] = useState(savedPreferences?.searchTerm || '');
+
+  // Initialiser projectFilter depuis l'URL, sinon localStorage, sinon vide
+  const [projectFilter, setProjectFilter] = useState(
+    searchParams.get('projectCode') || savedPreferences?.projectFilter || ''
+  );
+
+  // Initialiser statusFilter depuis l'URL si présent, sinon localStorage
   const initialStatusFilter = () => {
     const statusParam = searchParams.get('status');
     if (statusParam) {
       return statusParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
     }
-    return [];
+    return savedPreferences?.statusFilter || [];
   };
 
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter());
   const [statusFilterAnchorEl, setStatusFilterAnchorEl] = useState(null);
 
-  // Initialiser assigneeFilter depuis l'URL si présent (format: assignee=email1,email2)
+  // Initialiser assigneeFilter depuis l'URL si présent, sinon localStorage
   const initialAssigneeFilter = () => {
     const assigneeParam = searchParams.get('assignee');
     if (assigneeParam) {
       return assigneeParam.split(',').map(a => a.trim()).filter(a => a.length > 0);
     }
-    return [];
+    return savedPreferences?.assigneeFilter || [];
   };
 
   const [assigneeFilter, setAssigneeFilter] = useState(initialAssigneeFilter());
@@ -112,7 +151,8 @@ const TasksPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedTasks, setSelectedTasks] = useState([]);
-  const [viewMode, setViewMode] = useState(0); // 0 = Liste, 1 = Kanban
+  // Initialiser viewMode depuis localStorage ou mode Liste par défaut
+  const [viewMode, setViewMode] = useState(savedPreferences?.viewMode ?? 0); // 0 = Liste, 1 = Kanban
 
   const [formData, setFormData] = useState({
     title: '',
@@ -415,6 +455,18 @@ const TasksPage = () => {
     return () => clearTimeout(timer);
     // eslint-disable-next-line
   }, [searchTerm, statusFilter, projectFilter, assigneeFilter, viewMode]);
+
+  // Sauvegarder les préférences dans localStorage quand elles changent
+  useEffect(() => {
+    const preferences = {
+      viewMode,
+      searchTerm,
+      projectFilter,
+      statusFilter,
+      assigneeFilter,
+    };
+    savePreferences(preferences);
+  }, [viewMode, searchTerm, projectFilter, statusFilter, assigneeFilter]);
 
   const handlePageChange = (page) => {
     // Validation des limites de page
