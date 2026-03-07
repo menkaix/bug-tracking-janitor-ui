@@ -33,6 +33,7 @@ import {
   Close as CloseIcon,
   CalendarToday as CalendarIcon,
   People as PeopleIcon,
+  ContentCopy as CopyIcon,
 } from '@mui/icons-material';
 import personService from '../services/person.service';
 import logger from '../services/logger.service';
@@ -58,6 +59,9 @@ function PersonsPage() {
   // États pour la recherche
   const [searchTerm, setSearchTerm] = useState('');
   const [searchTimeout, setSearchTimeout] = useState(null);
+
+  // État pour le feedback de copie email
+  const [copiedEmail, setCopiedEmail] = useState(null);
 
   // États pour la modale
   const [showModal, setShowModal] = useState(false);
@@ -238,6 +242,14 @@ function PersonsPage() {
     }
   };
 
+  // Copier l'email dans le presse-papier
+  const handleCopyEmail = (email) => {
+    navigator.clipboard.writeText(email).then(() => {
+      setCopiedEmail(email);
+      setTimeout(() => setCopiedEmail(null), 2000);
+    });
+  };
+
   // Formater la date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -357,23 +369,27 @@ function PersonsPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          icon={<EmailIcon />}
-                          label={person.email}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                          component="a"
-                          href={`mailto:${person.email}`}
-                          clickable
-                          sx={{
-                            borderRadius: 2,
-                            textDecoration: 'none',
-                            '&:hover': {
-                              backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                            },
-                          }}
-                        />
+                        <Tooltip
+                          title={copiedEmail === person.email ? 'Copié !' : 'Copier l\'email'}
+                          placement="top"
+                        >
+                          <Chip
+                            icon={copiedEmail === person.email ? <CopyIcon /> : <EmailIcon />}
+                            label={person.email}
+                            size="small"
+                            color={copiedEmail === person.email ? 'success' : 'primary'}
+                            variant="outlined"
+                            onClick={() => handleCopyEmail(person.email)}
+                            clickable
+                            sx={{
+                              borderRadius: 2,
+                              cursor: 'pointer',
+                              '&:hover': {
+                                backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                              },
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1} alignItems="center">
