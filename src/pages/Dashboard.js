@@ -246,6 +246,18 @@ const Dashboard = () => {
         const status = t.status ? t.status.toLowerCase() : '';
         return status === 'to-study';
       }).length;
+      const projectToTest = projectTasks.filter(t => {
+        const status = t.status ? t.status.toLowerCase() : '';
+        return status === 'to-test';
+      }).length;
+      const projectTesting = projectTasks.filter(t => {
+        const status = t.status ? t.status.toLowerCase() : '';
+        return status === 'testing';
+      }).length;
+      const projectCanceled = projectTasks.filter(t => {
+        const status = t.status ? t.status.toLowerCase() : '';
+        return status === 'canceled' || status === 'cancelled';
+      }).length;
       const projectNoStatus = projectTasks.filter(t => !t.status || t.status.trim() === '').length;
 
       const projectCompletionRate = projectTotal > 0 ? parseFloat(((projectCompleted / projectTotal) * 100).toFixed(1)) : 0;
@@ -283,6 +295,9 @@ const Dashboard = () => {
         todoTasks: projectTodo,
         pendingTasks: projectPending,
         toStudyTasks: projectToStudy,
+        toTestTasks: projectToTest,
+        testingTasks: projectTesting,
+        canceledTasks: projectCanceled,
         noStatusTasks: projectNoStatus,
         completionRate: projectCompletionRate,
         hasDelay,
@@ -869,13 +884,49 @@ const Dashboard = () => {
                               </Grid>
                             )}
 
+                            {/* À tester - affiché si > 0 */}
+                            {project.toTestTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  À tester
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="info.main">
+                                  {project.toTestTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
+                            {/* En test - affiché si > 0 */}
+                            {project.testingTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  En test
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="warning.main">
+                                  {project.testingTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
+                            {/* Annulées - affiché si > 0 */}
+                            {project.canceledTasks > 0 && (
+                              <Grid item xs={6} sm={4} md={3}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Annulées
+                                </Typography>
+                                <Typography variant="body1" fontWeight={600} color="error.main">
+                                  {project.canceledTasks}
+                                </Typography>
+                              </Grid>
+                            )}
+
                             {/* Sans statut - affiché si > 0 */}
                             {project.noStatusTasks > 0 && (
                               <Grid item xs={6} sm={4} md={3}>
                                 <Typography variant="caption" color="text.secondary" display="block">
                                   Sans statut
                                 </Typography>
-                                <Typography variant="body1" fontWeight={600} color="error.main">
+                                <Typography variant="body1" fontWeight={600} color="text.secondary">
                                   {project.noStatusTasks}
                                 </Typography>
                               </Grid>

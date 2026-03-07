@@ -7,6 +7,7 @@ import {
   Button,
   Typography,
   Alert,
+  AlertTitle,
   CircularProgress,
   Container,
   InputAdornment,
@@ -29,17 +30,17 @@ import logger from '../services/logger.service';
 const ApiKeyLogin = ({ onLoginSuccess }) => {
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const theme = useTheme();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError(null);
 
     if (!apiKey.trim()) {
       logger.warn('Login attempt with empty API key');
-      setError('Veuillez saisir une clé API');
+      setError({ title: 'Clé API manquante', detail: 'Veuillez saisir une clé API.' });
       return;
     }
 
@@ -47,24 +48,27 @@ const ApiKeyLogin = ({ onLoginSuccess }) => {
     logger.info('Login attempt started');
 
     try {
-      // Sauvegarder la clé API
       apiService.setApiKey(apiKey.trim());
-
-      // Tester la connexion
       const result = await apiService.testConnection();
 
       if (result.success) {
         logger.info('Login successful');
         onLoginSuccess();
       } else {
-        logger.warn('Login failed - invalid API key');
-        setError('Clé API invalide. Veuillez vérifier et réessayer.');
+        logger.warn('Login failed', { error: result.error });
         apiService.clearApiKey();
+        setError({
+          title: 'Connexion échouée',
+          detail: result.error || 'Clé API invalide ou serveur inaccessible.',
+        });
       }
     } catch (err) {
       logger.error('Login error', { error: err.message });
-      setError('Erreur lors de la connexion. Veuillez réessayer.');
       apiService.clearApiKey();
+      setError({
+        title: 'Erreur de connexion',
+        detail: err.message || 'Une erreur inattendue est survenue.',
+      });
     } finally {
       setLoading(false);
     }
@@ -191,7 +195,8 @@ const ApiKeyLogin = ({ onLoginSuccess }) => {
 
               {error && (
                 <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-                  {error}
+                  <AlertTitle>{error.title}</AlertTitle>
+                  {error.detail}
                 </Alert>
               )}
 

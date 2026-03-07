@@ -17,7 +17,7 @@ const createApiInstance = () => {
     (config) => {
       const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
       if (apiKey) {
-        config.headers['X-API-Key'] = apiKey;
+        config.headers['x-api-key'] = apiKey;
       }
 
       // Log de la requête

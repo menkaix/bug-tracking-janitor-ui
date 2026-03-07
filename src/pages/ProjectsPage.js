@@ -28,6 +28,7 @@ import {
   Assignment as AssignmentIcon,
   Close as CloseIcon,
   Visibility as VisibilityIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
 import projectService from '../services/project.service';
 import taskService from '../services/task.service';
@@ -260,15 +261,28 @@ const ProjectsPage = () => {
           >
               <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 3 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
-                  <Chip
-                    icon={<FolderIcon />}
-                    label={project.projectCode}
-                    color="primary"
-                    sx={{
-                      fontWeight: 700,
-                      borderRadius: 2,
-                    }}
-                  />
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Chip
+                      icon={<FolderIcon />}
+                      label={project.projectCode}
+                      color="primary"
+                      sx={{
+                        fontWeight: 700,
+                        borderRadius: 2,
+                      }}
+                    />
+                    {project.clientName && (
+                      <Chip
+                        icon={<BusinessIcon />}
+                        label={project.clientName}
+                        color="secondary"
+                        sx={{
+                          fontWeight: 700,
+                          borderRadius: 2,
+                        }}
+                      />
+                    )}
+                  </Stack>
                   <Stack direction="row" spacing={0.5}>
                     <IconButton
                       size="small"
