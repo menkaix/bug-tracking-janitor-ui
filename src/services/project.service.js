@@ -96,6 +96,18 @@ const projectService = {
       return { success: false, error: error.message };
     }
   },
+
+  getProjectTree: async (projectCode) => {
+    try {
+      logger.debug('Fetching project tree', { projectCode });
+      const response = await apiClient.get(`/project-command/${projectCode}/tree`);
+      logger.info('Project tree fetched successfully', { projectCode });
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to fetch project tree', { error: error.message, projectCode });
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 export default projectService;

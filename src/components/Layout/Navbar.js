@@ -24,6 +24,7 @@ import {
   Logout as LogoutIcon,
   Menu as MenuIcon,
   BugReport as BugReportIcon,
+  AccountTree as TreeIcon,
 } from '@mui/icons-material';
 import { apiService } from '../../services/api.service';
 
@@ -54,6 +55,7 @@ const Navbar = ({ onLogout }) => {
     { path: '/tasks', label: 'Tâches', icon: <TasksIcon /> },
     { path: '/projects', label: 'Projets', icon: <ProjectsIcon /> },
     { path: '/persons', label: 'Personnes', icon: <PeopleIcon /> },
+    { path: '/feature-tree', label: 'Arbre Features', icon: <TreeIcon /> },
   ];
 
   const drawer = (
