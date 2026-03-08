@@ -208,8 +208,8 @@ const ProjectsPage = () => {
   };
 
   // Fonction pour obtenir le statut calculé d'un projet
-  const getCalculatedStatus = (projectCode) => {
-    const projectTasks = tasks.filter(t => t.projectCode === projectCode);
+  const getCalculatedStatus = (projectId) => {
+    const projectTasks = tasks.filter(t => t.projectId === projectId);
     return calculateProjectStatus(projectTasks);
   };
 
@@ -384,7 +384,7 @@ const ProjectsPage = () => {
 
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 'auto' }}>
                   {(() => {
-                    const calculatedStatus = getCalculatedStatus(project.projectCode);
+                    const calculatedStatus = getCalculatedStatus(project.id);
                     const statusInfo = getProjectStatusInfo(calculatedStatus);
                     return (
                       <Chip

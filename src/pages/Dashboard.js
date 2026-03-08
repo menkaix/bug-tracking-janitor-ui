@@ -108,7 +108,7 @@ const Dashboard = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    projectCode: '',
+    projectId: '',
     status: 'todo',
     estimate: '',
     trackingReference: '',
@@ -154,7 +154,7 @@ const Dashboard = () => {
 
     // Calculer le statut de chaque projet basé sur ses tâches
     const projectsWithCalculatedStatus = projects.map(p => {
-      const projectTasks = tasks.filter(t => t.projectCode === p.projectCode);
+      const projectTasks = tasks.filter(t => t.projectId === p.id);
       const calculatedStatus = calculateProjectStatus(projectTasks);
       return { ...p, calculatedStatus };
     });
@@ -210,7 +210,7 @@ const Dashboard = () => {
       // Seulement les projets actifs peuvent être en retard
       if (p.calculatedStatus !== 'ACTIVE') return false;
 
-      const projectTasks = tasks.filter(t => t.projectCode === p.projectCode);
+      const projectTasks = tasks.filter(t => t.projectId === p.id);
       return projectTasks.some(t => {
         const taskStatus = t.status ? t.status.toLowerCase() : '';
         if (taskStatus !== 'done' && t.dueDate) {
@@ -225,7 +225,7 @@ const Dashboard = () => {
     }).length;
 
     const projectDetails = projects.map(project => {
-      const projectTasks = tasks.filter(t => t.projectCode === project.projectCode);
+      const projectTasks = tasks.filter(t => t.projectId === project.id);
       const projectTotal = projectTasks.length;
 
       // Compter les tâches par statut
@@ -503,7 +503,7 @@ const Dashboard = () => {
     setFormData({
       title: task.title || '',
       description: task.description || '',
-      projectCode: task.projectCode || '',
+      projectId: task.projectId || '',
       status: task.status || 'todo',
       estimate: task.estimate || '',
       trackingReference: task.trackingReference || '',
@@ -1247,13 +1247,13 @@ const Dashboard = () => {
                 <FormControl fullWidth>
                   <InputLabel>Projet</InputLabel>
                   <Select
-                    value={formData.projectCode || ''}
-                    onChange={(e) => setFormData({ ...formData, projectCode: e.target.value })}
+                    value={formData.projectId || ''}
+                    onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                     label="Projet"
                   >
                     <MenuItem value="">Aucun projet</MenuItem>
                     {allProjects.map((project) => (
-                      <MenuItem key={project.id} value={project.projectCode}>
+                      <MenuItem key={project.id} value={project.id}>
                         {project.projectCode} - {project.projectName}
                       </MenuItem>
                     ))}
