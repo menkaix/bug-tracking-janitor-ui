@@ -10,6 +10,17 @@ const createApiInstance = () => {
     baseURL: API_CONFIG.BASE_URL,
     timeout: API_CONFIG.TIMEOUT,
     headers: API_CONFIG.HEADERS,
+    paramsSerializer: (params) => {
+      const parts = [];
+      for (const [key, value] of Object.entries(params)) {
+        if (Array.isArray(value)) {
+          value.forEach((v) => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`));
+        } else if (value !== undefined && value !== null) {
+          parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+      }
+      return parts.join('&');
+    },
   });
 
   // Intercepteur de requête pour ajouter l'API key
