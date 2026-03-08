@@ -33,6 +33,7 @@ import {
   CalendarToday as CalendarIcon,
   Update as UpdateIcon,
   Link as LinkIcon,
+  AccountTree as TreeIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -208,8 +209,8 @@ const ProjectsPage = () => {
   };
 
   // Fonction pour obtenir le statut calculé d'un projet
-  const getCalculatedStatus = (projectCode) => {
-    const projectTasks = tasks.filter(t => t.projectCode === projectCode);
+  const getCalculatedStatus = (projectId) => {
+    const projectTasks = tasks.filter(t => t.projectId === projectId);
     return calculateProjectStatus(projectTasks);
   };
 
@@ -384,7 +385,7 @@ const ProjectsPage = () => {
 
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 'auto' }}>
                   {(() => {
-                    const calculatedStatus = getCalculatedStatus(project.projectCode);
+                    const calculatedStatus = getCalculatedStatus(project.id);
                     const statusInfo = getProjectStatusInfo(calculatedStatus);
                     return (
                       <Chip
@@ -425,7 +426,7 @@ const ProjectsPage = () => {
                 </Stack>
               </CardContent>
 
-              <CardActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+              <CardActions sx={{ p: 2, borderTop: 1, borderColor: 'divider', gap: 1 }}>
                 <Button
                   fullWidth
                   variant="outlined"
@@ -437,6 +438,19 @@ const ProjectsPage = () => {
                   }}
                 >
                   Voir les tâches
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<TreeIcon />}
+                  onClick={() => navigate(`/feature-tree?projectCode=${project.projectCode}`)}
+                  sx={{
+                    borderRadius: 2,
+                    fontWeight: 600,
+                  }}
+                >
+                  Afficher l'arbre
                 </Button>
               </CardActions>
             </Card>

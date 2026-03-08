@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -689,6 +690,7 @@ const AddFeatureDialog = ({ open, onClose, onSubmit, submitting, storyAction, fe
 
 const FeatureTreePage = () => {
   const theme = useTheme();
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectCode, setProjectCode] = useState('');
@@ -711,7 +713,23 @@ const FeatureTreePage = () => {
   useEffect(() => {
     const loadProjects = async () => {
       const result = await projectService.getAllProjects(0, 1000);
-      if (result.success) setProjects(result.data.content || []);
+      if (result.success) {
+        const list = result.data.content || [];
+        setProjects(list);
+
+        const codeFromUrl = searchParams.get('projectCode');
+        if (codeFromUrl) {
+          const found = list.find((p) => p.projectCode === codeFromUrl);
+          if (found) {
+            setSelectedProject(found);
+            setProjectCode(found.projectCode);
+            fetchTree(found.projectCode);
+          } else {
+            setProjectCode(codeFromUrl.toUpperCase());
+            fetchTree(codeFromUrl.toUpperCase());
+          }
+        }
+      }
       setProjectsLoading(false);
     };
     const loadFeatureTypes = async () => {
