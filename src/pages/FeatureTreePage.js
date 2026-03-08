@@ -47,11 +47,13 @@ import {
   Search as SearchIcon,
   Add as AddIcon,
   Close as CloseIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import projectService from '../services/project.service';
 import backlogService from '../services/backlog.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
+import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -93,7 +95,7 @@ const TaskList = ({ tasks }) => {
   );
 };
 
-const FeatureItem = ({ feature }) => {
+const FeatureItem = ({ feature, onEdit }) => {
   const theme = useTheme();
   const config = getFeatureConfig(feature.type);
   const [open, setOpen] = useState(false);
@@ -122,6 +124,12 @@ const FeatureItem = ({ feature }) => {
         <Typography variant="body2" sx={{ flexGrow: 1 }}>
           {feature.name}
         </Typography>
+        {feature.comments?.length > 0 && (
+          <Chip label={`${feature.comments.length} 💬`} size="small" variant="outlined" />
+        )}
+        {feature.links?.length > 0 && (
+          <Chip label={`${feature.links.length} 🔗`} size="small" variant="outlined" />
+        )}
         {hasTasks && (
           <>
             <Chip
@@ -134,6 +142,9 @@ const FeatureItem = ({ feature }) => {
             </IconButton>
           </>
         )}
+        <IconButton size="small" onClick={() => onEdit(feature)} color="primary">
+          <EditIcon fontSize="small" />
+        </IconButton>
       </Stack>
       {hasTasks && (
         <Collapse in={open}>
@@ -144,7 +155,7 @@ const FeatureItem = ({ feature }) => {
   );
 };
 
-const StoryItem = ({ story, projectCode, actorName, onRefresh, onAddFeature }) => {
+const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature }) => {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const hasFeatures = story.features && story.features.length > 0;
@@ -186,6 +197,15 @@ const StoryItem = ({ story, projectCode, actorName, onRefresh, onAddFeature }) =
               variant="outlined"
             />
           )}
+          {story.comments?.length > 0 && (
+            <Chip label={`${story.comments.length} 💬`} size="small" variant="outlined" />
+          )}
+          {story.links?.length > 0 && (
+            <Chip label={`${story.links.length} 🔗`} size="small" variant="outlined" />
+          )}
+          <IconButton size="small" onClick={() => onEditStory(story)} color="primary">
+            <EditIcon fontSize="small" />
+          </IconButton>
           <Button
             size="small"
             startIcon={<AddIcon />}
@@ -219,7 +239,7 @@ const StoryItem = ({ story, projectCode, actorName, onRefresh, onAddFeature }) =
           {hasFeatures ? (
             <Stack spacing={1}>
               {story.features.map((feature) => (
-                <FeatureItem key={feature.id} feature={feature} />
+                <FeatureItem key={feature.id} feature={feature} onEdit={onEditFeature} />
               ))}
             </Stack>
           ) : (
@@ -233,7 +253,7 @@ const StoryItem = ({ story, projectCode, actorName, onRefresh, onAddFeature }) =
   );
 };
 
-const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature }) => {
+const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature, onEditStory, onEditFeature }) => {
   const isUser = actor.type === 'USER';
   return (
     <Accordion
@@ -274,9 +294,9 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
               <StoryItem
                 key={story.id}
                 story={story}
-                projectCode={projectCode}
-                actorName={actor.name}
                 onAddFeature={onAddFeature}
+                onEditStory={onEditStory}
+                onEditFeature={onEditFeature}
               />
             ))}
           </Stack>
@@ -291,6 +311,187 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
 };
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
+
+// ─── Dialogs d'édition (AbstractEntity) ──────────────────────────────────────
+
+const StoryEditDialog = ({ open, onClose, onSave, featureTypes }) => {
+  const [form, setForm] = useState({ action: '', scenario: '', objective: '', comments: [], links: [] });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [storyId, setStoryId] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    // open est l'objet story (id + champs DTO de l'arbre) ou null
+    if (open?.id) {
+      setLoading(true);
+      setStoryId(open.id);
+      backlogService.getEntity('stories', open.id).then((result) => {
+        if (result.success) {
+          const d = result.data;
+          setForm({
+            action: d.action || '',
+            scenario: d.scenario || '',
+            objective: d.objective || '',
+            comments: d.comments || [],
+            links: d.links || [],
+          });
+        }
+        setLoading(false);
+      });
+    }
+  }, [open]);
+
+  const handleClose = () => { setForm({ action: '', scenario: '', objective: '', comments: [], links: [] }); onClose(); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    // Story command update (FullStoryDTO + comments/links via patch)
+    const storyDTO = { id: storyId, action: form.action, scenario: form.scenario, objective: form.objective };
+    const r1 = await backlogService.updateStory(storyDTO);
+    // PATCH pour comments + links
+    const r2 = await backlogService.patchEntity('stories', storyId, { comments: form.comments, links: form.links });
+    setSaving(false);
+    if (r1.success) { onSave(); handleClose(); }
+    else alert(`Erreur : ${r1.error || r2.error}`);
+  };
+
+  return (
+    <Dialog open={!!open} onClose={handleClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6" fontWeight={700}>Modifier la user story</Typography>
+          <IconButton onClick={handleClose} size="small"><CloseIcon /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+        ) : (
+          <Stack spacing={3}>
+            <TextField fullWidth label="Action (je voudrais...)" value={form.action}
+              onChange={(e) => setForm({ ...form, action: e.target.value })} required />
+            <TextField fullWidth label="Scénario" value={form.scenario}
+              onChange={(e) => setForm({ ...form, scenario: e.target.value })} multiline rows={4} />
+            <TextField fullWidth label="Objectif" value={form.objective}
+              onChange={(e) => setForm({ ...form, objective: e.target.value })} />
+            <Divider />
+            <AbstractEntityEditor
+              comments={form.comments}
+              links={form.links}
+              onChangeComments={(c) => setForm({ ...form, comments: c })}
+              onChangeLinks={(l) => setForm({ ...form, links: l })}
+            />
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleClose} variant="outlined">Annuler</Button>
+        <Button onClick={handleSave} variant="contained" disabled={loading || saving}
+          startIcon={saving ? <CircularProgress size={16} /> : <EditIcon />}>
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const FeatureEditDialog = ({ open, onClose, onSave, featureTypes, featureTypesLoading }) => {
+  const [form, setForm] = useState({ name: '', description: '', type: '', comments: [], links: [] });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [featureId, setFeatureId] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (open?.id) {
+      setLoading(true);
+      setFeatureId(open.id);
+      backlogService.getEntity('features', open.id).then((result) => {
+        if (result.success) {
+          const d = result.data;
+          setForm({
+            name: d.name || '',
+            description: d.description || '',
+            type: d.type || '',
+            comments: d.comments || [],
+            links: d.links || [],
+          });
+        }
+        setLoading(false);
+      });
+    }
+  }, [open]);
+
+  const handleClose = () => { setForm({ name: '', description: '', type: '', comments: [], links: [] }); onClose(); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const result = await backlogService.patchEntity('features', featureId, {
+      name: form.name,
+      description: form.description,
+      type: form.type,
+      comments: form.comments,
+      links: form.links,
+    });
+    setSaving(false);
+    if (result.success) { onSave(); handleClose(); }
+    else alert(`Erreur : ${result.error}`);
+  };
+
+  return (
+    <Dialog open={!!open} onClose={handleClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6" fontWeight={700}>Modifier la feature</Typography>
+          <IconButton onClick={handleClose} size="small"><CloseIcon /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+        ) : (
+          <Stack spacing={3}>
+            <TextField fullWidth label="Nom" value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <FormControl fullWidth>
+              <InputLabel>Type</InputLabel>
+              <Select label="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
+                disabled={featureTypesLoading}>
+                {(featureTypes || []).map((t) => {
+                  const cfg = getFeatureConfig(t);
+                  return (
+                    <MenuItem key={t} value={t}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {cfg.icon}<span>{cfg.label}</span>
+                      </Stack>
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+            <TextField fullWidth label="Description" value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })} multiline rows={3} />
+            <Divider />
+            <AbstractEntityEditor
+              comments={form.comments}
+              links={form.links}
+              onChangeComments={(c) => setForm({ ...form, comments: c })}
+              onChangeLinks={(l) => setForm({ ...form, links: l })}
+            />
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleClose} variant="outlined">Annuler</Button>
+        <Button onClick={handleSave} variant="contained" disabled={loading || saving}
+          startIcon={saving ? <CircularProgress size={16} /> : <EditIcon />}>
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const AddActorDialog = ({ open, onClose, onSubmit, submitting }) => {
   const [form, setForm] = useState({ name: '', type: 'USER' });
@@ -499,10 +700,13 @@ const FeatureTreePage = () => {
   const [featureTypes, setFeatureTypes] = useState([]);
   const [featureTypesLoading, setFeatureTypesLoading] = useState(true);
 
-  // Dialog state
+  // Dialog state — création
   const [actorDialog, setActorDialog] = useState(false);
   const [storyDialog, setStoryDialog] = useState({ open: false, actor: null });
   const [featureDialog, setFeatureDialog] = useState({ open: false, story: null });
+  // Dialog state — édition
+  const [editStoryDialog, setEditStoryDialog] = useState(null); // story object or null
+  const [editFeatureDialog, setEditFeatureDialog] = useState(null); // feature object or null
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -736,6 +940,8 @@ const FeatureTreePage = () => {
                 defaultExpanded={idx === 0}
                 onAddStory={(a) => setStoryDialog({ open: true, actor: a })}
                 onAddFeature={(s) => setFeatureDialog({ open: true, story: s })}
+                onEditStory={(s) => setEditStoryDialog(s)}
+                onEditFeature={(f) => setEditFeatureDialog(f)}
               />
             ))
           ) : (
@@ -784,6 +990,21 @@ const FeatureTreePage = () => {
         onSubmit={handleAddFeature}
         submitting={submitting}
         storyAction={featureDialog.story?.action}
+        featureTypes={featureTypes}
+        featureTypesLoading={featureTypesLoading}
+      />
+
+      {/* Dialogs d'édition */}
+      <StoryEditDialog
+        open={editStoryDialog}
+        onClose={() => setEditStoryDialog(null)}
+        onSave={() => { setEditStoryDialog(null); fetchTree(treeData?.code); }}
+        featureTypes={featureTypes}
+      />
+      <FeatureEditDialog
+        open={editFeatureDialog}
+        onClose={() => setEditFeatureDialog(null)}
+        onSave={() => { setEditFeatureDialog(null); fetchTree(treeData?.code); }}
         featureTypes={featureTypes}
         featureTypesLoading={featureTypesLoading}
       />

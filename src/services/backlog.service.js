@@ -67,6 +67,56 @@ const backlogService = {
       return { success: false, error: error.message };
     }
   },
+
+  /**
+   * Récupère une entité complète (avec comments et links embarqués).
+   * entityType: 'stories' | 'features' | 'actors' | 'projects' | 'tasks'
+   * GET /{entityType}/{id}
+   */
+  getEntity: async (entityType, id) => {
+    try {
+      logger.debug('Fetching entity', { entityType, id });
+      const response = await apiClient.get(`/${entityType}/${id}`);
+      logger.info('Entity fetched successfully', { entityType, id });
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to fetch entity', { error: error.message, entityType, id });
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * Met à jour partiellement une entité (comments, links ou champs métier).
+   * entityType: 'stories' | 'features' | 'actors' | 'projects' | 'tasks'
+   * PATCH /{entityType}/{id}
+   */
+  patchEntity: async (entityType, id, data) => {
+    try {
+      logger.info('Patching entity', { entityType, id });
+      const response = await apiClient.patch(`/${entityType}/${id}`, data);
+      logger.info('Entity patched successfully', { entityType, id });
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to patch entity', { error: error.message, entityType, id });
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * Met à jour une story via le endpoint command.
+   * POST /story-command/update — Body: FullStoryDTO
+   */
+  updateStory: async (storyDTO) => {
+    try {
+      logger.info('Updating story via command', { id: storyDTO.id });
+      const response = await apiClient.post('/story-command/update', storyDTO);
+      logger.info('Story updated successfully', { id: storyDTO.id });
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to update story', { error: error.message, id: storyDTO.id });
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 export default backlogService;

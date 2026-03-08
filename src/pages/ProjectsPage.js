@@ -18,6 +18,7 @@ import {
   Chip,
   alpha,
   useTheme,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -32,6 +33,8 @@ import {
 } from '@mui/icons-material';
 import projectService from '../services/project.service';
 import taskService from '../services/task.service';
+import backlogService from '../services/backlog.service';
+import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
@@ -60,6 +63,8 @@ const ProjectsPage = () => {
     projectName: '',
     projectCode: '',
     description: '',
+    comments: [],
+    links: [],
   });
 
   const loadProjects = async (page = 0) => {
@@ -118,22 +123,29 @@ const ProjectsPage = () => {
 
   const handleCreateProject = () => {
     setEditingProject(null);
-    setFormData({
-      projectName: '',
-      projectCode: '',
-      description: '',
-    });
+    setFormData({ projectName: '', projectCode: '', description: '', comments: [], links: [] });
     setShowModal(true);
   };
 
-  const handleEditProject = (project) => {
+  const handleEditProject = async (project) => {
     setEditingProject(project);
     setFormData({
       projectName: project.projectName || '',
       projectCode: project.projectCode || '',
       description: project.description || '',
+      comments: [],
+      links: [],
     });
     setShowModal(true);
+    // Charger les commentaires et liens depuis le backend
+    const result = await backlogService.getEntity('projects', project.id);
+    if (result.success) {
+      setFormData((prev) => ({
+        ...prev,
+        comments: result.data.comments || [],
+        links: result.data.links || [],
+      }));
+    }
   };
 
   const handleDeleteProject = async (id) => {
@@ -158,6 +170,13 @@ const ProjectsPage = () => {
     let result;
     if (editingProject) {
       result = await projectService.updateProject(editingProject.id, formData);
+      // PATCH comments et liens séparément
+      if (result.success) {
+        await backlogService.patchEntity('projects', editingProject.id, {
+          comments: formData.comments,
+          links: formData.links,
+        });
+      }
     } else {
       result = await projectService.createProject(formData);
     }
@@ -486,6 +505,18 @@ const ProjectsPage = () => {
                 placeholder="Décrivez votre projet..."
                 required
               />
+
+              {editingProject && (
+                <>
+                  <Divider />
+                  <AbstractEntityEditor
+                    comments={formData.comments}
+                    links={formData.links}
+                    onChangeComments={(c) => setFormData({ ...formData, comments: c })}
+                    onChangeLinks={(l) => setFormData({ ...formData, links: l })}
+                  />
+                </>
+              )}
             </Stack>
           </DialogContent>
 

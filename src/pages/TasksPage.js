@@ -32,6 +32,7 @@ import {
   useTheme,
   Tabs,
   Tab,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -58,10 +59,12 @@ import {
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
+import backlogService from '../services/backlog.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
 import KanbanBoard from '../components/Tasks/KanbanBoard';
+import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
 import { format } from 'date-fns';
 
 /**
@@ -164,6 +167,8 @@ const TasksPage = () => {
     plannedStart: '',
     deadLine: '',
     assignees: [],
+    comments: [],
+    links: [],
   });
 
   // Fonctions helper pour convertir assignee (backend) <-> assignees (frontend)
@@ -501,7 +506,7 @@ const TasksPage = () => {
     setShowModal(true);
   };
 
-  const handleEditTask = (task) => {
+  const handleEditTask = async (task) => {
     setEditingTask(task);
     setFormData({
       title: task.title || '',
@@ -513,8 +518,19 @@ const TasksPage = () => {
       plannedStart: task.plannedStart ? task.plannedStart.split('T')[0] : '',
       deadLine: task.deadLine ? task.deadLine.split('T')[0] : '',
       assignees: assigneeToArray(task.assignee),
+      comments: [],
+      links: [],
     });
     setShowModal(true);
+    // Charger les commentaires et liens
+    const result = await backlogService.getEntity('tasks', task.id);
+    if (result.success) {
+      setFormData((prev) => ({
+        ...prev,
+        comments: result.data.comments || [],
+        links: result.data.links || [],
+      }));
+    }
   };
 
   const handleDeleteTask = async (id) => {
@@ -548,6 +564,12 @@ const TasksPage = () => {
     let result;
     if (editingTask) {
       result = await taskService.updateTask(editingTask.id, taskData);
+      if (result.success) {
+        await backlogService.patchEntity('tasks', editingTask.id, {
+          comments: formData.comments,
+          links: formData.links,
+        });
+      }
     } else {
       result = await taskService.createTask(taskData);
     }
@@ -1941,6 +1963,18 @@ const TasksPage = () => {
                   )}
                 </Stack>
               </Box>
+
+              {editingTask && (
+                <>
+                  <Divider />
+                  <AbstractEntityEditor
+                    comments={formData.comments}
+                    links={formData.links}
+                    onChangeComments={(c) => setFormData({ ...formData, comments: c })}
+                    onChangeLinks={(l) => setFormData({ ...formData, links: l })}
+                  />
+                </>
+              )}
             </Stack>
           </DialogContent>
 
