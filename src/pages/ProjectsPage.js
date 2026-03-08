@@ -30,7 +30,12 @@ import {
   Close as CloseIcon,
   Visibility as VisibilityIcon,
   Business as BusinessIcon,
+  CalendarToday as CalendarIcon,
+  Update as UpdateIcon,
+  Link as LinkIcon,
 } from '@mui/icons-material';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import projectService from '../services/project.service';
 import taskService from '../services/task.service';
 import backlogService from '../services/backlog.service';
@@ -39,6 +44,15 @@ import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
 import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
+
+const formatDate = (date) => {
+  if (!date) return null;
+  try {
+    return format(new Date(date), 'dd MMM yyyy', { locale: fr });
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Page de gestion des projets - Material UI 2025
@@ -267,7 +281,7 @@ const ProjectsPage = () => {
           <Card
             key={project.id}
             sx={{
-              height: 380, // Hauteur fixe pour toutes les cartes
+              height: 420, // Hauteur fixe pour toutes les cartes
               display: 'flex',
               flexDirection: 'column',
               borderRadius: 3,
@@ -368,7 +382,7 @@ const ProjectsPage = () => {
                   {project.description || 'Aucune description pour ce projet.'}
                 </Typography>
 
-                <Stack direction="row" spacing={1} sx={{ mt: 'auto' }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 'auto' }}>
                   {(() => {
                     const calculatedStatus = getCalculatedStatus(project.projectCode);
                     const statusInfo = getProjectStatusInfo(calculatedStatus);
@@ -380,6 +394,34 @@ const ProjectsPage = () => {
                       />
                     );
                   })()}
+                  {(project.links?.length > 0) && (
+                    <Chip
+                      icon={<LinkIcon sx={{ fontSize: '0.8rem !important' }} />}
+                      label={project.links.length}
+                      size="small"
+                      variant="outlined"
+                      sx={{ height: 22, fontSize: '0.7rem' }}
+                    />
+                  )}
+                </Stack>
+
+                <Stack spacing={0.5} sx={{ mt: 1.5 }}>
+                  {formatDate(project.creationDate) && (
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <CalendarIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                      <Typography variant="caption" color="text.disabled">
+                        Créé le {formatDate(project.creationDate)}
+                      </Typography>
+                    </Stack>
+                  )}
+                  {formatDate(project.lastUpdateDate) && (
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <UpdateIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Mis à jour le {formatDate(project.lastUpdateDate)}
+                      </Typography>
+                    </Stack>
+                  )}
                 </Stack>
               </CardContent>
 

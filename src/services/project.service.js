@@ -32,7 +32,7 @@ const parseHalResponse = (data, size) => ({
 const projectService = {
   getAllProjects: async (page = 0, size = 10, search = '', filter = '') => {
     try {
-      const params = { page, size, sort: 'creationDate,desc' };
+      const params = { page, size, sort: ['lastUpdateDate,desc', 'creationDate,desc'] };
       if (search) params.search = search;
       if (filter) params.filter = filter;
 
