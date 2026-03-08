@@ -203,8 +203,8 @@ const ProjectsPage = () => {
     }
   };
 
-  const handleViewTasks = (projectCode) => {
-    navigate(`/tasks?projectCode=${projectCode}`);
+  const handleViewTasks = (projectId) => {
+    navigate(`/tasks?projectId=${projectId}`);
   };
 
   // Fonction pour obtenir le statut calculé d'un projet
@@ -430,7 +430,7 @@ const ProjectsPage = () => {
                   fullWidth
                   variant="outlined"
                   startIcon={<VisibilityIcon />}
-                  onClick={() => handleViewTasks(project.projectCode)}
+                  onClick={() => handleViewTasks(project.id)}
                   sx={{
                     borderRadius: 2,
                     fontWeight: 600,

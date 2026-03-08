@@ -124,7 +124,7 @@ const TasksPage = () => {
 
   // Initialiser projectFilter depuis l'URL, sinon localStorage, sinon vide
   const [projectFilter, setProjectFilter] = useState(
-    searchParams.get('projectCode') || savedPreferences?.projectFilter || ''
+    searchParams.get('projectId') || savedPreferences?.projectFilter || ''
   );
 
   // Initialiser statusFilter depuis l'URL si présent, sinon localStorage
@@ -160,7 +160,7 @@ const TasksPage = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    projectCode: '',
+    projectId: '',
     status: 'todo',
     estimate: '',
     trackingReference: '',
@@ -243,9 +243,9 @@ const TasksPage = () => {
         let filteredTasks = uniqueTasks;
         if (projectFilter) {
           if (projectFilter === 'no-project') {
-            filteredTasks = uniqueTasks.filter(task => !task.projectCode || task.projectCode === '');
+            filteredTasks = uniqueTasks.filter(task => !task.projectId || task.projectId === '');
           } else {
-            filteredTasks = uniqueTasks.filter(task => task.projectCode === projectFilter);
+            filteredTasks = uniqueTasks.filter(task => task.projectId === projectFilter);
           }
         }
         console.log('Tâches après filtre projet:', filteredTasks.length);
@@ -295,7 +295,7 @@ const TasksPage = () => {
 
           if (result.success) {
             const allTasks = result.data.content || [];
-            let noProjectTasks = allTasks.filter(task => !task.projectCode || task.projectCode === '');
+            let noProjectTasks = allTasks.filter(task => !task.projectId || task.projectId === '');
             console.log('Tâches sans projet:', noProjectTasks.length);
 
             // Filtrer par assignee côté client
@@ -337,7 +337,7 @@ const TasksPage = () => {
           }
         } else {
           // Requête normale avec filtre de projet si présent
-          const filter = projectFilter ? `projectCode:${projectFilter}` : '';
+          const filter = projectFilter ? `projectId:${projectFilter}` : '';
 
           // Si le filtre assignee est actif, récupérer toutes les tâches pour filtrer côté client
           if (assigneeFilter.length > 0) {
@@ -495,7 +495,7 @@ const TasksPage = () => {
     setFormData({
       title: '',
       description: '',
-      projectCode: '',
+      projectId: '',
       status: 'todo',
       estimate: '',
       trackingReference: '',
@@ -511,7 +511,7 @@ const TasksPage = () => {
     setFormData({
       title: task.title || '',
       description: task.description || '',
-      projectCode: task.projectCode || '',
+      projectId: task.projectId || '',
       status: task.status || 'todo',
       estimate: task.estimate || '',
       trackingReference: task.trackingReference || '',
@@ -686,23 +686,23 @@ const TasksPage = () => {
     }
   };
 
-  const handleProjectChange = async (taskId, newProjectCode) => {
+  const handleProjectChange = async (taskId, newProjectId) => {
     // Mise à jour optimiste de l'UI
     setTasks(prevTasks =>
       prevTasks.map(task =>
-        task.id === taskId ? { ...task, projectCode: newProjectCode } : task
+        task.id === taskId ? { ...task, projectId: newProjectId } : task
       )
     );
 
     // Appel API pour persister le changement
     const task = tasks.find(t => t.id === taskId);
-    const result = await taskService.updateTask(taskId, { ...task, projectCode: newProjectCode });
+    const result = await taskService.updateTask(taskId, { ...task, projectId: newProjectId });
 
     if (!result.success) {
       // Revenir à l'ancien projet en cas d'erreur
       setTasks(prevTasks =>
         prevTasks.map(t =>
-          t.id === taskId ? { ...t, projectCode: task.projectCode } : t
+          t.id === taskId ? { ...t, projectId: task.projectId } : t
         )
       );
       alert('Erreur lors de la mise à jour du projet');
@@ -927,7 +927,7 @@ const TasksPage = () => {
       params.status = statuses.join(',');
     }
     if (project) {
-      params.projectCode = project;
+      params.projectId = project;
     }
     if (assignees && assignees.length > 0) {
       params.assignee = assignees.join(',');
@@ -1084,7 +1084,7 @@ const TasksPage = () => {
                   </Stack>
                 </MenuItem>
                 {projects.map((project) => (
-                  <MenuItem key={project.id} value={project.projectCode}>
+                  <MenuItem key={project.id} value={project.id}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Chip
                         label={project.projectCode}
@@ -1338,7 +1338,7 @@ const TasksPage = () => {
                   label={
                     projectFilter === 'no-project'
                       ? 'Projet: Sans projet'
-                      : `Projet: ${projects.find(p => p.projectCode === projectFilter)?.projectCode || projectFilter}`
+                      : `Projet: ${projects.find(p => p.id === projectFilter)?.projectCode || projectFilter}`
                   }
                   size="small"
                   onDelete={() => {
@@ -1546,14 +1546,14 @@ const TasksPage = () => {
                   <TableCell>
                     <FormControl size="small" sx={{ minWidth: 200 }}>
                       <Select
-                        value={task.projectCode || ''}
+                        value={task.projectId || ''}
                         onChange={(e) => handleProjectChange(task.id, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
                         sx={{ borderRadius: 2 }}
                       >
                         <MenuItem value="">Aucun projet</MenuItem>
                         {projects.map((project) => (
-                          <MenuItem key={project.id} value={project.projectCode}>
+                          <MenuItem key={project.id} value={project.id}>
                             {project.projectCode} - {project.projectName}
                           </MenuItem>
                         ))}
@@ -1819,13 +1819,13 @@ const TasksPage = () => {
                 <FormControl fullWidth>
                   <InputLabel>Projet</InputLabel>
                   <Select
-                    value={formData.projectCode}
-                    onChange={(e) => setFormData({ ...formData, projectCode: e.target.value })}
+                    value={formData.projectId}
+                    onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                     label="Projet"
                   >
                     <MenuItem value="">Aucun</MenuItem>
                     {projects.map((project) => (
-                      <MenuItem key={project.id} value={project.projectCode}>
+                      <MenuItem key={project.id} value={project.id}>
                         {project.projectName} ({project.projectCode})
                       </MenuItem>
                     ))}
