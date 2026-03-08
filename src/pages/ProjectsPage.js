@@ -33,6 +33,7 @@ import {
   CalendarToday as CalendarIcon,
   Update as UpdateIcon,
   Link as LinkIcon,
+  AccountTree as TreeIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -425,7 +426,7 @@ const ProjectsPage = () => {
                 </Stack>
               </CardContent>
 
-              <CardActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+              <CardActions sx={{ p: 2, borderTop: 1, borderColor: 'divider', gap: 1 }}>
                 <Button
                   fullWidth
                   variant="outlined"
@@ -437,6 +438,19 @@ const ProjectsPage = () => {
                   }}
                 >
                   Voir les tâches
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<TreeIcon />}
+                  onClick={() => navigate(`/feature-tree?projectCode=${project.projectCode}`)}
+                  sx={{
+                    borderRadius: 2,
+                    fontWeight: 600,
+                  }}
+                >
+                  Afficher l'arbre
                 </Button>
               </CardActions>
             </Card>
