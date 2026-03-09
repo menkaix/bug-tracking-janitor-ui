@@ -31,6 +31,10 @@ import {
   FormControl,
   InputLabel,
   CircularProgress,
+  LinearProgress,
+  Tooltip,
+  Menu,
+  Avatar,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
@@ -49,9 +53,12 @@ import {
   Add as AddIcon,
   Close as CloseIcon,
   Edit as EditIcon,
+  EditNote as BulkEditIcon,
 } from '@mui/icons-material';
 import projectService from '../services/project.service';
 import backlogService from '../services/backlog.service';
+import taskService from '../services/task.service';
+import personService from '../services/person.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
@@ -75,28 +82,315 @@ const ACTOR_TYPES = [
 const getFeatureConfig = (type) =>
   FEATURE_TYPE_DISPLAY[type] || { label: type, icon: <ChevronRightIcon fontSize="small" />, color: 'default' };
 
+// ─── Helpers tâches ───────────────────────────────────────────────────────────
+
+const CLOSED_STATUSES = ['done'];
+const ACTIVE_STATUSES = ['in-progress', 'to-test', 'testing'];
+
+const TASK_STATUS_COLOR = {
+  'todo':        '#7c4dff',
+  'pending':     '#ff9800',
+  'in-progress': '#2196f3',
+  'to-study':    '#9c27b0',
+  'done':        '#4caf50',
+  'to-test':     '#00bcd4',
+  'testing':     '#03a9f4',
+  'canceled':    '#f44336',
+  'no-status':   '#9e9e9e',
+};
+
+const TASK_STATUS_LABEL = {
+  'todo':        'À faire',
+  'pending':     'En attente',
+  'in-progress': 'En cours',
+  'to-study':    'À étudier',
+  'done':        'Terminé',
+  'to-test':     'À tester',
+  'testing':     'En test',
+  'canceled':    'Annulé',
+  'no-status':   'Sans statut',
+};
+
+/** Collecte toutes les tâches depuis un tableau de features */
+const tasksFromFeatures = (features) =>
+  (features || []).flatMap((f) => f.tasks || []);
+
+/** Collecte toutes les tâches depuis un tableau de stories */
+const tasksFromStories = (stories) =>
+  (stories || []).flatMap((s) => tasksFromFeatures(s.features || []));
+
+/** Collecte toutes les tâches depuis un tableau d'acteurs */
+const tasksFromActors = (actors) =>
+  (actors || []).flatMap((a) => tasksFromStories(a.stories || []));
+
+const normalizeStatus = (status) => (status || '').toLowerCase();
+
+const computeStats = (tasks) => {
+  const total = tasks.length;
+  const done = tasks.filter((t) => CLOSED_STATUSES.includes(normalizeStatus(t.status))).length;
+  const active = tasks.filter((t) => ACTIVE_STATUSES.includes(normalizeStatus(t.status))).length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return { total, done, active, pct };
+};
+
+// Ordre d'affichage des segments dans la barre (du plus "avancé" au moins avancé)
+const STATUS_DISPLAY_ORDER = ['done', 'testing', 'to-test', 'in-progress', 'to-study', 'pending', 'todo', 'canceled', 'no-status'];
+
+/** Barre de progression segmentée multicolore avec tooltip détaillé */
+const TaskProgress = ({ tasks, size = 'small' }) => {
+  if (!tasks || tasks.length === 0) return null;
+  const { total, done, pct } = computeStats(tasks);
+
+  // Grouper par statut normalisé ('no-status' pour les tâches sans statut)
+  const countByStatus = tasks.reduce((acc, t) => {
+    const s = normalizeStatus(t.status) || 'no-status';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Segments ordonnés (statuts connus en premier, puis inconnus)
+  const knownSegments = STATUS_DISPLAY_ORDER
+    .filter((s) => countByStatus[s])
+    .map((s) => [s, countByStatus[s]]);
+  const unknownSegments = Object.entries(countByStatus)
+    .filter(([s]) => !STATUS_DISPLAY_ORDER.includes(s));
+  const segments = [...knownSegments, ...unknownSegments];
+
+  const barHeight = size === 'large' ? 8 : 5;
+
+  const tooltipContent = (
+    <Box sx={{ p: 0.5 }}>
+      <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
+        {done}/{total} tâche{total > 1 ? 's' : ''} terminée{done > 1 ? 's' : ''} ({pct}%)
+      </Typography>
+      {segments.map(([s, count]) => (
+        <Stack key={s} direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.25 }}>
+          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: TASK_STATUS_COLOR[s] || '#9e9e9e', flexShrink: 0 }} />
+          <Typography variant="caption">
+            {TASK_STATUS_LABEL[s] || s} : {count} ({Math.round((count / total) * 100)}%)
+          </Typography>
+        </Stack>
+      ))}
+    </Box>
+  );
+
+  return (
+    <Tooltip title={tooltipContent} arrow placement="top">
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: size === 'large' ? 180 : 120 }}>
+        <Box
+          sx={{
+            flexGrow: 1,
+            height: barHeight,
+            borderRadius: barHeight / 2,
+            overflow: 'hidden',
+            display: 'flex',
+            bgcolor: 'action.hover',
+          }}
+        >
+          {segments.map(([s, count]) => (
+            <Box
+              key={s}
+              sx={{
+                width: `${(count / total) * 100}%`,
+                bgcolor: TASK_STATUS_COLOR[s] || '#9e9e9e',
+                transition: 'width 0.3s ease',
+                flexShrink: 0,
+              }}
+            />
+          ))}
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', fontWeight: 600, fontSize: '0.7rem' }}>
+          {done}/{total}
+        </Typography>
+      </Stack>
+    </Tooltip>
+  );
+};
+
+// ─── Mise à jour de statut ────────────────────────────────────────────────────
+
+/** Select compact pour changer le statut d'une tâche individuelle */
+const TaskStatusSelect = ({ task, onRefresh }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = async (e) => {
+    e.stopPropagation();
+    setLoading(true);
+    await taskService.patchTask(task.id, { status: e.target.value });
+    setLoading(false);
+    onRefresh();
+  };
+
+  return (
+    <Select
+      value={normalizeStatus(task.status) || 'todo'}
+      onChange={handleChange}
+      size="small"
+      variant="standard"
+      disabled={loading}
+      onClick={(e) => e.stopPropagation()}
+      sx={{ fontSize: '0.72rem', minWidth: 110, '& .MuiSelect-select': { py: 0.25 } }}
+    >
+      {Object.entries(TASK_STATUS_LABEL).map(([value, label]) => (
+        <MenuItem key={value} value={value} sx={{ fontSize: '0.8rem' }}>
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: TASK_STATUS_COLOR[value], flexShrink: 0 }} />
+            <span>{label}</span>
+          </Stack>
+        </MenuItem>
+      ))}
+    </Select>
+  );
+};
+
+/** Bouton + menu pour appliquer un statut en lot à un ensemble de tâches */
+const BulkStatusMenu = ({ tasks, onRefresh, label }) => {
+  const [anchor, setAnchor] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleApply = async (status) => {
+    setAnchor(null);
+    setLoading(true);
+    await Promise.all(tasks.map((t) => taskService.patchTask(t.id, { status })));
+    setLoading(false);
+    onRefresh();
+  };
+
+  if (!tasks || tasks.length === 0) return null;
+
+  return (
+    <>
+      <Tooltip title={`Appliquer un statut aux ${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`}>
+        <span>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={loading ? <CircularProgress size={12} /> : <BulkEditIcon fontSize="small" />}
+            onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
+            disabled={loading}
+            sx={{ borderRadius: 2, fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
+          >
+            {label || `${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`}
+          </Button>
+        </span>
+      </Tooltip>
+      <Menu
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Typography variant="caption" sx={{ px: 2, py: 0.5, color: 'text.secondary', display: 'block', fontWeight: 600 }}>
+          Appliquer à {tasks.length} tâche{tasks.length > 1 ? 's' : ''}
+        </Typography>
+        <Divider sx={{ my: 0.5 }} />
+        {Object.entries(TASK_STATUS_LABEL).map(([value, label]) => (
+          <MenuItem key={value} onClick={() => handleApply(value)} sx={{ fontSize: '0.85rem' }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: TASK_STATUS_COLOR[value], flexShrink: 0 }} />
+              <span>{label}</span>
+            </Stack>
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+};
+
+/** Bouton + menu pour affecter en lot un ensemble de tâches à une personne */
+const BulkAssignMenu = ({ tasks, persons, onRefresh }) => {
+  const [anchor, setAnchor] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleAssign = async (email) => {
+    setAnchor(null);
+    setLoading(true);
+    await Promise.all(tasks.map((t) => taskService.patchTask(t.id, { assignee: email })));
+    setLoading(false);
+    onRefresh();
+  };
+
+  if (!tasks || tasks.length === 0) return null;
+
+  return (
+    <>
+      <Tooltip title={`Affecter les ${tasks.length} tâche${tasks.length > 1 ? 's' : ''} à une personne`}>
+        <span>
+          <Button
+            size="small"
+            variant="outlined"
+            color="secondary"
+            startIcon={loading ? <CircularProgress size={12} /> : <PersonIcon fontSize="small" />}
+            onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
+            disabled={loading}
+            sx={{ borderRadius: 2, fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
+          >
+            Affecter
+          </Button>
+        </span>
+      </Tooltip>
+      <Menu
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Typography variant="caption" sx={{ px: 2, py: 0.5, color: 'text.secondary', display: 'block', fontWeight: 600 }}>
+          Affecter {tasks.length} tâche{tasks.length > 1 ? 's' : ''} à
+        </Typography>
+        <Divider sx={{ my: 0.5 }} />
+        <MenuItem onClick={() => handleAssign('')} sx={{ fontSize: '0.85rem' }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Avatar sx={{ width: 24, height: 24, fontSize: '0.65rem', bgcolor: 'action.disabledBackground' }}>—</Avatar>
+            <Typography variant="body2" color="text.secondary">Non affecté</Typography>
+          </Stack>
+        </MenuItem>
+        {(persons || []).map((p) => (
+          <MenuItem key={p.id} onClick={() => handleAssign(p.email)} sx={{ fontSize: '0.85rem' }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Avatar sx={{ width: 24, height: 24, fontSize: '0.65rem', bgcolor: 'primary.main' }}>
+                {p.firstName?.[0]}{p.lastName?.[0]}
+              </Avatar>
+              <Typography variant="body2">{p.firstName} {p.lastName}</Typography>
+            </Stack>
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+};
+
 // ─── Sous-composants (tâches, features, stories, acteurs) ─────────────────────
 
-const TaskList = ({ tasks }) => {
+const TaskList = ({ tasks, onRefresh }) => {
   if (!tasks || tasks.length === 0) return null;
   return (
     <List dense disablePadding sx={{ pl: 2, mt: 1 }}>
       {tasks.map((task) => (
         <ListItem key={task.id} disableGutters sx={{ py: 0.25 }}>
-          <ListItemIcon sx={{ minWidth: 28 }}>
-            <TaskIcon fontSize="small" color="action" />
+          <ListItemIcon sx={{ minWidth: 24 }}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: TASK_STATUS_COLOR[normalizeStatus(task.status) || 'no-status'] || '#9e9e9e',
+                mt: '1px',
+              }}
+            />
           </ListItemIcon>
           <ListItemText
             primary={task.title}
             primaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
           />
+          <TaskStatusSelect task={task} onRefresh={onRefresh} />
         </ListItem>
       ))}
     </List>
   );
 };
 
-const FeatureItem = ({ feature, onEdit }) => {
+const FeatureItem = ({ feature, onEdit, onCreateTask, onRefresh, persons }) => {
   const theme = useTheme();
   const config = getFeatureConfig(feature.type);
   const [open, setOpen] = useState(false);
@@ -133,33 +427,42 @@ const FeatureItem = ({ feature, onEdit }) => {
         )}
         {hasTasks && (
           <>
-            <Chip
-              label={`${feature.tasks.length} tâche${feature.tasks.length > 1 ? 's' : ''}`}
-              size="small"
-              variant="outlined"
-            />
+            <TaskProgress tasks={feature.tasks} />
+            <BulkStatusMenu tasks={feature.tasks} onRefresh={onRefresh} />
+            <BulkAssignMenu tasks={feature.tasks} persons={persons} onRefresh={onRefresh} />
             <IconButton size="small" onClick={() => setOpen(!open)}>
               {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
             </IconButton>
           </>
         )}
+        <Button
+          size="small"
+          startIcon={<AddIcon />}
+          variant="outlined"
+          color="success"
+          onClick={(e) => { e.stopPropagation(); onCreateTask(feature); }}
+          sx={{ borderRadius: 2, fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
+        >
+          Tâche
+        </Button>
         <IconButton size="small" onClick={() => onEdit(feature)} color="primary">
           <EditIcon fontSize="small" />
         </IconButton>
       </Stack>
       {hasTasks && (
         <Collapse in={open}>
-          <TaskList tasks={feature.tasks} />
+          <TaskList tasks={feature.tasks} onRefresh={onRefresh} />
         </Collapse>
       )}
     </Box>
   );
 };
 
-const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature }) => {
+const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons }) => {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const hasFeatures = story.features && story.features.length > 0;
+  const storyTasks = tasksFromFeatures(story.features);
 
   return (
     <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
@@ -198,6 +501,9 @@ const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature }) => {
               variant="outlined"
             />
           )}
+          {storyTasks.length > 0 && <TaskProgress tasks={storyTasks} />}
+          {storyTasks.length > 0 && <BulkStatusMenu tasks={storyTasks} onRefresh={onRefresh} />}
+          {storyTasks.length > 0 && <BulkAssignMenu tasks={storyTasks} persons={persons} onRefresh={onRefresh} />}
           {story.comments?.length > 0 && (
             <Chip label={`${story.comments.length} 💬`} size="small" variant="outlined" />
           )}
@@ -240,7 +546,7 @@ const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature }) => {
           {hasFeatures ? (
             <Stack spacing={1}>
               {story.features.map((feature) => (
-                <FeatureItem key={feature.id} feature={feature} onEdit={onEditFeature} />
+                <FeatureItem key={feature.id} feature={feature} onEdit={onEditFeature} onCreateTask={onCreateTask} onRefresh={onRefresh} persons={persons} />
               ))}
             </Stack>
           ) : (
@@ -254,8 +560,9 @@ const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature }) => {
   );
 };
 
-const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature, onEditStory, onEditFeature }) => {
+const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons }) => {
   const isUser = actor.type === 'USER';
+  const actorTasks = tasksFromStories(actor.stories);
   return (
     <Accordion
       defaultExpanded={defaultExpanded}
@@ -276,6 +583,9 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
             size="small"
             variant="outlined"
           />
+          {actorTasks.length > 0 && <TaskProgress tasks={actorTasks} size="large" />}
+          {actorTasks.length > 0 && <BulkStatusMenu tasks={actorTasks} onRefresh={onRefresh} />}
+          {actorTasks.length > 0 && <BulkAssignMenu tasks={actorTasks} persons={persons} onRefresh={onRefresh} />}
           <Box sx={{ flexGrow: 1 }} />
           <Button
             size="small"
@@ -298,6 +608,9 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
                 onAddFeature={onAddFeature}
                 onEditStory={onEditStory}
                 onEditFeature={onEditFeature}
+                onCreateTask={onCreateTask}
+                onRefresh={onRefresh}
+                persons={persons}
               />
             ))}
           </Stack>
@@ -686,6 +999,79 @@ const AddFeatureDialog = ({ open, onClose, onSubmit, submitting, storyAction, fe
   );
 };
 
+const CreateTaskDialog = ({ open, onClose, onSave, feature, persons, submitting }) => {
+  const [form, setForm] = useState({ title: '', status: 'todo', assignee: '' });
+
+  const handleClose = () => { setForm({ title: '', status: 'todo', assignee: '' }); onClose(); };
+  const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
+
+  return (
+    <Dialog open={!!open} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Box>
+            <Typography variant="h6" fontWeight={700}>Nouvelle tâche</Typography>
+            {feature?.name && (
+              <Typography variant="caption" color="text.secondary">Feature : {feature.name}</Typography>
+            )}
+          </Box>
+          <IconButton onClick={handleClose} size="small"><CloseIcon /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <form onSubmit={handleSubmit}>
+        <DialogContent dividers>
+          <Stack spacing={2.5}>
+            <TextField
+              fullWidth
+              label="Titre de la tâche"
+              placeholder="Ex: Implémenter le formulaire de connexion"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              required
+              autoFocus
+            />
+            <FormControl fullWidth>
+              <InputLabel>Statut</InputLabel>
+              <Select label="Statut" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {Object.entries(TASK_STATUS_LABEL).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: TASK_STATUS_COLOR[value], flexShrink: 0 }} />
+                      <span>{label}</span>
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Assigné à</InputLabel>
+              <Select label="Assigné à" value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
+                <MenuItem value=""><em>Non assigné</em></MenuItem>
+                {(persons || []).map((p) => (
+                  <MenuItem key={p.id} value={p.email}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Avatar sx={{ width: 24, height: 24, fontSize: '0.65rem', bgcolor: 'primary.main' }}>
+                        {p.firstName?.[0]}{p.lastName?.[0]}
+                      </Avatar>
+                      <span>{p.firstName} {p.lastName}</span>
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleClose} variant="outlined">Annuler</Button>
+          <Button type="submit" variant="contained" disabled={submitting} startIcon={submitting ? <CircularProgress size={16} /> : <AddIcon />}>
+            Créer
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+};
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 const FeatureTreePage = () => {
@@ -701,11 +1087,13 @@ const FeatureTreePage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [featureTypes, setFeatureTypes] = useState([]);
   const [featureTypesLoading, setFeatureTypesLoading] = useState(true);
+  const [persons, setPersons] = useState([]);
 
   // Dialog state — création
   const [actorDialog, setActorDialog] = useState(false);
   const [storyDialog, setStoryDialog] = useState({ open: false, actor: null });
   const [featureDialog, setFeatureDialog] = useState({ open: false, story: null });
+  const [createTaskDialog, setCreateTaskDialog] = useState(null); // feature object or null
   // Dialog state — édition
   const [editStoryDialog, setEditStoryDialog] = useState(null); // story object or null
   const [editFeatureDialog, setEditFeatureDialog] = useState(null); // feature object or null
@@ -742,8 +1130,13 @@ const FeatureTreePage = () => {
       }
       setFeatureTypesLoading(false);
     };
+    const loadPersons = async () => {
+      const result = await personService.getAllPersons(0, 1000);
+      if (result.success) setPersons(result.data.content || []);
+    };
     loadProjects();
     loadFeatureTypes();
+    loadPersons();
   }, []);
 
   const fetchTree = async (code) => {
@@ -813,6 +1206,27 @@ const FeatureTreePage = () => {
     }
   };
 
+  const handleCreateTask = async (form) => {
+    setSubmitting(true);
+    const featureId = createTaskDialog?.id;
+    const result = await taskService.createTask({
+      title: form.title,
+      status: form.status,
+      assignee: form.assignee || '',
+      featureId,
+      projectId: selectedProject?.id,
+      reference: `feature/${featureId}/dev`,
+      idReference: `feature/${featureId}`,
+    });
+    setSubmitting(false);
+    if (result.success) {
+      setCreateTaskDialog(null);
+      fetchTree(treeData.code);
+    } else {
+      alert(`Erreur : ${result.error}`);
+    }
+  };
+
   // ── Stats ──────────────────────────────────────────────────────────────────
 
   const totalStories = treeData?.actors?.reduce((sum, a) => sum + (a.stories?.length || 0), 0) || 0;
@@ -821,6 +1235,8 @@ const FeatureTreePage = () => {
       (sum, a) => sum + (a.stories?.reduce((s, st) => s + (st.features?.length || 0), 0) || 0),
       0
     ) || 0;
+  const allTasks = tasksFromActors(treeData?.actors);
+  const globalStats = computeStats(allTasks);
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -935,6 +1351,21 @@ const FeatureTreePage = () => {
                   </Typography>
                   <Typography variant="caption" color="text.secondary">Features</Typography>
                 </Box>
+                {allTasks.length > 0 && (
+                  <Box sx={{ textAlign: 'center', minWidth: 120 }}>
+                    <Typography variant="h4" fontWeight={700} color={globalStats.pct === 100 ? 'success.main' : 'text.primary'}>
+                      {globalStats.pct}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {globalStats.done}/{allTasks.length} tâches
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={globalStats.pct}
+                      sx={{ mt: 0.5, height: 4, borderRadius: 2, bgcolor: 'action.hover', '& .MuiLinearProgress-bar': { bgcolor: 'success.main' } }}
+                    />
+                  </Box>
+                )}
               </Stack>
               <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
               <Button
@@ -960,6 +1391,9 @@ const FeatureTreePage = () => {
                 onAddFeature={(s) => setFeatureDialog({ open: true, story: s })}
                 onEditStory={(s) => setEditStoryDialog(s)}
                 onEditFeature={(f) => setEditFeatureDialog(f)}
+                onCreateTask={(f) => setCreateTaskDialog(f)}
+                onRefresh={() => fetchTree(treeData.code)}
+                persons={persons}
               />
             ))
           ) : (
@@ -1010,6 +1444,15 @@ const FeatureTreePage = () => {
         storyAction={featureDialog.story?.action}
         featureTypes={featureTypes}
         featureTypesLoading={featureTypesLoading}
+      />
+
+      <CreateTaskDialog
+        open={!!createTaskDialog}
+        onClose={() => setCreateTaskDialog(null)}
+        onSave={handleCreateTask}
+        feature={createTaskDialog}
+        persons={persons}
+        submitting={submitting}
       />
 
       {/* Dialogs d'édition */}

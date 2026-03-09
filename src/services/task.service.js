@@ -78,6 +78,25 @@ const taskService = {
   },
 
   /**
+   * Met à jour partiellement une tâche via GET + PUT (PATCH non supporté par le gateway)
+   * @param {string} id - ID de la tâche
+   * @param {Object} patch - Champs à mettre à jour (ex: { status: 'done' })
+   */
+  patchTask: async (id, patch) => {
+    try {
+      logger.info('Patching task (GET+PUT)', { id, patch });
+      const getResponse = await apiClient.get(`/task/${id}`);
+      const fullTask = getResponse.data;
+      const response = await apiClient.put(`/task/${id}`, { ...fullTask, ...patch });
+      logger.info('Task patched successfully', { id });
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to patch task', { error: error.message, id, patch });
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
    * Supprime une tâche
    * @param {string} id - ID de la tâche
    */
