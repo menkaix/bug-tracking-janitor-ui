@@ -78,6 +78,9 @@ const Dashboard = () => {
     completedTasks: 0,
     inProgressTasks: 0,
     todoTasks: 0,
+    pendingTasks: 0,
+    todoEstimate: 0,
+    pendingEstimate: 0,
     completionRate: 0,
     averageTasksPerProject: 0,
     projectsByStatus: {},
@@ -91,6 +94,9 @@ const Dashboard = () => {
     completedTasksByPersons: 0,
     inProgressTasksByPersons: 0,
     todoTasksByPersons: 0,
+    pendingTasksByPersons: 0,
+    todoEstimateByPersons: 0,
+    pendingEstimateByPersons: 0,
     averageTasksPerPerson: 0,
     averageCompletionRate: 0,
     personsWithOverload: 0,
@@ -214,16 +220,24 @@ const Dashboard = () => {
     let completedTasks = 0;
     let inProgressTasks = 0;
     let todoTasks = 0;
+    let pendingTasks = 0;
+    let todoEstimate = 0;
+    let pendingEstimate = 0;
 
     activeTasks.forEach(t => {
       const status = t.status ? t.status.toLowerCase() : '';
+      const est = parseFloat(t.estimatedManHours) || 0;
 
       if (status === 'done') {
         completedTasks++;
       } else if (status === 'in-progress' || status === 'in_progress' || status === 'inprogress') {
         inProgressTasks++;
-      } else if (status === 'todo' || status === 'to-do' || status === 'pending') {
+      } else if (status === 'todo' || status === 'to-do') {
         todoTasks++;
+        todoEstimate += est;
+      } else if (status === 'pending') {
+        pendingTasks++;
+        pendingEstimate += est;
       }
     });
 
@@ -360,6 +374,9 @@ const Dashboard = () => {
       completedTasks,
       inProgressTasks,
       todoTasks,
+      pendingTasks,
+      todoEstimate: parseFloat(todoEstimate.toFixed(1)),
+      pendingEstimate: parseFloat(pendingEstimate.toFixed(1)),
       completionRate,
       averageTasksPerProject,
       tasksByPriority,
@@ -414,6 +431,9 @@ const Dashboard = () => {
     let completedTasksByPersons = 0;
     let inProgressTasksByPersons = 0;
     let todoTasksByPersons = 0;
+    let pendingTasksByPersons = 0;
+    let todoEstimateByPersons = 0;
+    let pendingEstimateByPersons = 0;
 
     tasks.forEach(t => {
       if (t.assignee) {
@@ -440,9 +460,11 @@ const Dashboard = () => {
             } else if (status === 'todo' || status === 'to-do') {
               tasksByPerson[person.id].todo++;
               todoTasksByPersons++;
+              todoEstimateByPersons += parseFloat(t.estimatedManHours) || 0;
             } else if (status === 'pending') {
               tasksByPerson[person.id].pending++;
-              todoTasksByPersons++;
+              pendingTasksByPersons++;
+              pendingEstimateByPersons += parseFloat(t.estimatedManHours) || 0;
             } else {
               tasksByPerson[person.id].other++;
             }
@@ -502,7 +524,8 @@ const Dashboard = () => {
           total: p.total,
           completed: p.completed,
           inProgress: p.inProgress,
-          todo: p.todo + p.pending,
+          todo: p.todo,
+          pending: p.pending,
           activeTasks: activeTasks,
         };
       })
@@ -515,6 +538,9 @@ const Dashboard = () => {
       completedTasksByPersons,
       inProgressTasksByPersons,
       todoTasksByPersons,
+      pendingTasksByPersons,
+      todoEstimateByPersons: parseFloat(todoEstimateByPersons.toFixed(1)),
+      pendingEstimateByPersons: parseFloat(pendingEstimateByPersons.toFixed(1)),
       averageTasksPerPerson,
       averageCompletionRate,
       personsWithOverload,
@@ -611,7 +637,7 @@ const Dashboard = () => {
     return statusOptions.find(opt => opt.value === status) || { label: status, color: 'default', icon: <AssignmentIcon fontSize="small" /> };
   };
 
-  const StatCard = ({ icon, title, value, color = 'primary', onClick }) => (
+  const StatCard = ({ icon, title, value, subtitle, color = 'primary', onClick }) => (
     <Card
       onClick={onClick}
       sx={{
@@ -634,6 +660,11 @@ const Dashboard = () => {
             <Typography variant="h4" fontWeight={700} sx={{ mt: 1 }}>
               {value}
             </Typography>
+            {subtitle && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                {subtitle}
+              </Typography>
+            )}
           </Box>
           <Avatar
             sx={{
@@ -760,7 +791,17 @@ const Dashboard = () => {
                 icon={<PendingIcon />}
                 title="À Faire"
                 value={projectsData.todoTasks}
+                subtitle={projectsData.todoEstimate > 0 ? `${projectsData.todoEstimate} h estimées` : undefined}
                 color="secondary"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                icon={<ScheduleIcon />}
+                title="En Attente"
+                value={projectsData.pendingTasks}
+                subtitle={projectsData.pendingEstimate > 0 ? `${projectsData.pendingEstimate} h estimées` : undefined}
+                color="info"
               />
             </Grid>
           </Grid>
@@ -1092,7 +1133,17 @@ const Dashboard = () => {
                 icon={<PendingIcon />}
                 title="À Faire"
                 value={personsData.todoTasksByPersons}
+                subtitle={personsData.todoEstimateByPersons > 0 ? `${personsData.todoEstimateByPersons} h estimées` : undefined}
                 color="secondary"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                icon={<ScheduleIcon />}
+                title="En Attente"
+                value={personsData.pendingTasksByPersons}
+                subtitle={personsData.pendingEstimateByPersons > 0 ? `${personsData.pendingEstimateByPersons} h estimées` : undefined}
+                color="info"
               />
             </Grid>
           </Grid>
@@ -1212,7 +1263,8 @@ const Dashboard = () => {
                         />
                         <Stack direction="row" spacing={1}>
                           <Chip label={`${person.inProgress} en cours`} size="small" color="warning" variant="outlined" />
-                          <Chip label={`${person.todo} à faire`} size="small" color="info" variant="outlined" />
+                          <Chip label={`${person.todo} à faire`} size="small" color="secondary" variant="outlined" />
+                          {person.pending > 0 && <Chip label={`${person.pending} en attente`} size="small" color="info" variant="outlined" />}
                           <Chip label={`${person.completed} terminées`} size="small" color="success" variant="outlined" />
                           <Chip label={`${completionRate}%`} size="small" color="primary" />
                         </Stack>
