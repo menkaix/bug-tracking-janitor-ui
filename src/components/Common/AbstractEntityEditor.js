@@ -61,19 +61,21 @@ const CommentsPanel = ({ comments = [], onChange }) => {
     setForm({ author: '', text: '' });
   };
 
-  const handleDelete = (idx) => {
-    onChange(comments.filter((_, i) => i !== idx));
+  const handleDelete = (item) => {
+    onChange(comments.filter((c) => c !== item));
   };
+
+  const sorted = [...comments].sort((a, b) => new Date(b.createDate) - new Date(a.createDate));
 
   return (
     <Box>
-      {comments.length === 0 ? (
+      {sorted.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
           Aucun commentaire pour le moment.
         </Typography>
       ) : (
         <List disablePadding>
-          {comments.map((c, idx) => (
+          {sorted.map((c, idx) => (
             <React.Fragment key={idx}>
               <ListItem alignItems="flex-start" sx={{ px: 0, py: 1 }}>
                 <Avatar
@@ -101,12 +103,12 @@ const CommentsPanel = ({ comments = [], onChange }) => {
                   secondaryTypographyProps={{ variant: 'body2', sx: { mt: 0.25 } }}
                 />
                 <ListItemSecondaryAction>
-                  <IconButton size="small" onClick={() => handleDelete(idx)} color="error">
+                  <IconButton size="small" onClick={() => handleDelete(c)} color="error">
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </ListItemSecondaryAction>
               </ListItem>
-              {idx < comments.length - 1 && <Divider />}
+              {idx < sorted.length - 1 && <Divider />}
             </React.Fragment>
           ))}
         </List>
@@ -173,19 +175,21 @@ const LinksPanel = ({ links = [], onChange }) => {
     setForm({ name: '', href: '', version: '' });
   };
 
-  const handleDelete = (idx) => {
-    onChange(links.filter((_, i) => i !== idx));
+  const handleDelete = (item) => {
+    onChange(links.filter((l) => l !== item));
   };
+
+  const sorted = [...links].sort((a, b) => new Date(b.createDate) - new Date(a.createDate));
 
   return (
     <Box>
-      {links.length === 0 ? (
+      {sorted.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
           Aucun lien pour le moment.
         </Typography>
       ) : (
         <List disablePadding>
-          {links.map((l, idx) => (
+          {sorted.map((l, idx) => (
             <React.Fragment key={idx}>
               <ListItem sx={{ px: 0, py: 1 }}>
                 <LinkIcon fontSize="small" sx={{ mr: 1.5, color: 'text.secondary', flexShrink: 0 }} />
@@ -211,12 +215,12 @@ const LinksPanel = ({ links = [], onChange }) => {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton size="small" onClick={() => handleDelete(idx)} color="error">
+                  <IconButton size="small" onClick={() => handleDelete(l)} color="error">
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </ListItemSecondaryAction>
               </ListItem>
-              {idx < links.length - 1 && <Divider />}
+              {idx < sorted.length - 1 && <Divider />}
             </React.Fragment>
           ))}
         </List>
