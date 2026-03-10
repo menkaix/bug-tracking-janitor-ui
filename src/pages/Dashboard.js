@@ -37,6 +37,8 @@ import {
   Close as CloseIcon,
   CalendarToday as CalendarIcon,
   Person as PersonIcon,
+  Comment as CommentIcon,
+  Link as LinkIcon,
 } from '@mui/icons-material';
 import {
   Button,
@@ -54,6 +56,7 @@ import {
 import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
+import backlogService from '../services/backlog.service';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import OccupationCalendar from '../components/Dashboard/OccupationCalendar';
@@ -75,6 +78,9 @@ const Dashboard = () => {
     completedTasks: 0,
     inProgressTasks: 0,
     todoTasks: 0,
+    pendingTasks: 0,
+    todoEstimate: 0,
+    pendingEstimate: 0,
     completionRate: 0,
     averageTasksPerProject: 0,
     projectsByStatus: {},
@@ -88,6 +94,9 @@ const Dashboard = () => {
     completedTasksByPersons: 0,
     inProgressTasksByPersons: 0,
     todoTasksByPersons: 0,
+    pendingTasksByPersons: 0,
+    todoEstimateByPersons: 0,
+    pendingEstimateByPersons: 0,
     averageTasksPerPerson: 0,
     averageCompletionRate: 0,
     personsWithOverload: 0,
@@ -139,6 +148,37 @@ const Dashboard = () => {
 
         calculateProjectKPIs(tasks, projects);
         calculatePersonKPIs(tasks, persons);
+
+        // Charger les commentaires/liens directement sur les projets (non bloquant)
+        const nonCompletedProjects = projects
+          .filter(p => {
+            const pt = tasks.filter(t => t.projectId === p.id);
+            return calculateProjectStatus(pt) !== 'COMPLETED';
+          })
+          .slice(0, 10);
+
+        Promise.allSettled(
+          nonCompletedProjects.map(p => backlogService.getEntity('projects', p.id))
+        ).then(results => {
+          const map = {};
+          nonCompletedProjects.forEach((project, i) => {
+            const r = results[i];
+            if (r.status === 'fulfilled' && r.value.success) {
+              const data = r.value.data;
+              map[project.id] = {
+                totalComments: Array.isArray(data.comments) ? data.comments.length : 0,
+                totalLinks: Array.isArray(data.links) ? data.links.length : 0,
+              };
+            }
+          });
+          setProjectsData(prev => ({
+            ...prev,
+            projectDetails: prev.projectDetails.map(pd => ({
+              ...pd,
+              ...(map[pd.id] || {}),
+            })),
+          }));
+        });
       } else {
         setError('Impossible de charger les données du tableau de bord');
       }
@@ -167,26 +207,43 @@ const Dashboard = () => {
       p.calculatedStatus === 'COMPLETED'
     ).length;
 
-    const totalTasks = tasks.length;
+    // IDs des projets non terminés — utilisés pour filtrer les tâches des indicateurs
+    const activeProjectIds = new Set(
+      projectsWithCalculatedStatus
+        .filter(p => p.calculatedStatus !== 'COMPLETED')
+        .map(p => p.id)
+    );
+    const activeTasks = tasks.filter(t => activeProjectIds.has(t.projectId));
+
+    const totalTasks = activeTasks.length;
 
     let completedTasks = 0;
     let inProgressTasks = 0;
     let todoTasks = 0;
+    let pendingTasks = 0;
+    let todoEstimate = 0;
+    let pendingEstimate = 0;
 
-    tasks.forEach(t => {
+    activeTasks.forEach(t => {
       const status = t.status ? t.status.toLowerCase() : '';
+      const est = parseFloat(t.estimatedManHours) || 0;
 
       if (status === 'done') {
         completedTasks++;
       } else if (status === 'in-progress' || status === 'in_progress' || status === 'inprogress') {
         inProgressTasks++;
-      } else if (status === 'todo' || status === 'to-do' || status === 'pending') {
+      } else if (status === 'todo' || status === 'to-do') {
         todoTasks++;
+        todoEstimate += est;
+      } else if (status === 'pending') {
+        pendingTasks++;
+        pendingEstimate += est;
       }
     });
 
     const completionRate = totalTasks > 0 ? parseFloat(((completedTasks / totalTasks) * 100).toFixed(1)) : 0;
-    const averageTasksPerProject = totalProjects > 0 ? parseFloat((totalTasks / totalProjects).toFixed(1)) : 0;
+    const activeProjectsCount = activeProjectIds.size;
+    const averageTasksPerProject = activeProjectsCount > 0 ? parseFloat((totalTasks / activeProjectsCount).toFixed(1)) : 0;
 
     const tasksByPriority = {
       high: 0,
@@ -194,7 +251,7 @@ const Dashboard = () => {
       low: 0,
     };
 
-    tasks.forEach(t => {
+    activeTasks.forEach(t => {
       const priority = t.priority ? t.priority.toLowerCase() : '';
       if (priority === 'high' || priority === 'haute') {
         tasksByPriority.high++;
@@ -288,6 +345,7 @@ const Dashboard = () => {
       return {
         id: project.id,
         name: project.projectName || 'Sans nom',
+        code: project.projectCode || '',
         status: calculatedStatus, // Utiliser le statut calculé
         totalTasks: projectTotal,
         completedTasks: projectCompleted,
@@ -302,6 +360,8 @@ const Dashboard = () => {
         completionRate: projectCompletionRate,
         hasDelay,
         assignedPersonsCount: assignedPersonsSet.size,
+        totalComments: 0,
+        totalLinks: 0,
       };
     }).sort((a, b) => b.totalTasks - a.totalTasks);
 
@@ -314,6 +374,9 @@ const Dashboard = () => {
       completedTasks,
       inProgressTasks,
       todoTasks,
+      pendingTasks,
+      todoEstimate: parseFloat(todoEstimate.toFixed(1)),
+      pendingEstimate: parseFloat(pendingEstimate.toFixed(1)),
       completionRate,
       averageTasksPerProject,
       tasksByPriority,
@@ -368,6 +431,9 @@ const Dashboard = () => {
     let completedTasksByPersons = 0;
     let inProgressTasksByPersons = 0;
     let todoTasksByPersons = 0;
+    let pendingTasksByPersons = 0;
+    let todoEstimateByPersons = 0;
+    let pendingEstimateByPersons = 0;
 
     tasks.forEach(t => {
       if (t.assignee) {
@@ -394,9 +460,11 @@ const Dashboard = () => {
             } else if (status === 'todo' || status === 'to-do') {
               tasksByPerson[person.id].todo++;
               todoTasksByPersons++;
+              todoEstimateByPersons += parseFloat(t.estimatedManHours) || 0;
             } else if (status === 'pending') {
               tasksByPerson[person.id].pending++;
-              todoTasksByPersons++;
+              pendingTasksByPersons++;
+              pendingEstimateByPersons += parseFloat(t.estimatedManHours) || 0;
             } else {
               tasksByPerson[person.id].other++;
             }
@@ -456,7 +524,8 @@ const Dashboard = () => {
           total: p.total,
           completed: p.completed,
           inProgress: p.inProgress,
-          todo: p.todo + p.pending,
+          todo: p.todo,
+          pending: p.pending,
           activeTasks: activeTasks,
         };
       })
@@ -469,6 +538,9 @@ const Dashboard = () => {
       completedTasksByPersons,
       inProgressTasksByPersons,
       todoTasksByPersons,
+      pendingTasksByPersons,
+      todoEstimateByPersons: parseFloat(todoEstimateByPersons.toFixed(1)),
+      pendingEstimateByPersons: parseFloat(pendingEstimateByPersons.toFixed(1)),
       averageTasksPerPerson,
       averageCompletionRate,
       personsWithOverload,
@@ -565,7 +637,7 @@ const Dashboard = () => {
     return statusOptions.find(opt => opt.value === status) || { label: status, color: 'default', icon: <AssignmentIcon fontSize="small" /> };
   };
 
-  const StatCard = ({ icon, title, value, color = 'primary', onClick }) => (
+  const StatCard = ({ icon, title, value, subtitle, color = 'primary', onClick }) => (
     <Card
       onClick={onClick}
       sx={{
@@ -588,6 +660,11 @@ const Dashboard = () => {
             <Typography variant="h4" fontWeight={700} sx={{ mt: 1 }}>
               {value}
             </Typography>
+            {subtitle && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                {subtitle}
+              </Typography>
+            )}
           </Box>
           <Avatar
             sx={{
@@ -714,7 +791,17 @@ const Dashboard = () => {
                 icon={<PendingIcon />}
                 title="À Faire"
                 value={projectsData.todoTasks}
+                subtitle={projectsData.todoEstimate > 0 ? `${projectsData.todoEstimate} h estimées` : undefined}
                 color="secondary"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                icon={<ScheduleIcon />}
+                title="En Attente"
+                value={projectsData.pendingTasks}
+                subtitle={projectsData.pendingEstimate > 0 ? `${projectsData.pendingEstimate} h estimées` : undefined}
+                color="info"
               />
             </Grid>
           </Grid>
@@ -765,23 +852,31 @@ const Dashboard = () => {
                 Performance par Projet
               </Typography>
               <Stack spacing={2}>
-                {projectsData.projectDetails.slice(0, 10).map((project) => (
+                {projectsData.projectDetails.filter(p => p.status !== 'COMPLETED').slice(0, 10).map((project) => (
                   <Card key={project.id} variant="outlined">
                     <CardContent sx={{ display: 'flex', flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                          <Typography
-                            variant="h6"
-                            fontWeight={600}
-                            gutterBottom
-                            sx={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {project.name}
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+                            {project.code && (
+                              <Typography variant="body2" color="text.secondary" fontWeight={600} sx={{ flexShrink: 0 }}>
+                                [{project.code}]
+                              </Typography>
+                            )}
+                            <Typography
+                              variant="h6"
+                              fontWeight={600}
+                              gutterBottom
+                              sx={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                mb: 0,
+                              }}
+                            >
+                              {project.name}
+                            </Typography>
+                          </Box>
                           <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
                             <Chip
                               label={getProjectStatusInfo(project.status).label}
@@ -796,6 +891,24 @@ const Dashboard = () => {
                               size="small"
                               variant="outlined"
                             />
+                            {project.totalComments > 0 && (
+                              <Chip
+                                icon={<CommentIcon />}
+                                label={project.totalComments}
+                                size="small"
+                                variant="outlined"
+                                color="default"
+                              />
+                            )}
+                            {project.totalLinks > 0 && (
+                              <Chip
+                                icon={<LinkIcon />}
+                                label={project.totalLinks}
+                                size="small"
+                                variant="outlined"
+                                color="default"
+                              />
+                            )}
                           </Stack>
                         </Box>
                         <Typography variant="h5" fontWeight={700} color="primary" sx={{ ml: 2, flexShrink: 0 }}>
@@ -1020,7 +1133,17 @@ const Dashboard = () => {
                 icon={<PendingIcon />}
                 title="À Faire"
                 value={personsData.todoTasksByPersons}
+                subtitle={personsData.todoEstimateByPersons > 0 ? `${personsData.todoEstimateByPersons} h estimées` : undefined}
                 color="secondary"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                icon={<ScheduleIcon />}
+                title="En Attente"
+                value={personsData.pendingTasksByPersons}
+                subtitle={personsData.pendingEstimateByPersons > 0 ? `${personsData.pendingEstimateByPersons} h estimées` : undefined}
+                color="info"
               />
             </Grid>
           </Grid>
@@ -1140,7 +1263,8 @@ const Dashboard = () => {
                         />
                         <Stack direction="row" spacing={1}>
                           <Chip label={`${person.inProgress} en cours`} size="small" color="warning" variant="outlined" />
-                          <Chip label={`${person.todo} à faire`} size="small" color="info" variant="outlined" />
+                          <Chip label={`${person.todo} à faire`} size="small" color="secondary" variant="outlined" />
+                          {person.pending > 0 && <Chip label={`${person.pending} en attente`} size="small" color="info" variant="outlined" />}
                           <Chip label={`${person.completed} terminées`} size="small" color="success" variant="outlined" />
                           <Chip label={`${completionRate}%`} size="small" color="primary" />
                         </Stack>
