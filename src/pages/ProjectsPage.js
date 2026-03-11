@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -61,6 +62,7 @@ const formatDate = (date) => {
 const ProjectsPage = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [pagination, setPagination] = useState({
@@ -175,7 +177,7 @@ const ProjectsPage = () => {
       const targetPage = willBeEmpty && notFirstPage ? pagination.currentPage - 1 : pagination.currentPage;
       loadProjects(targetPage);
     } else {
-      alert('Erreur lors de la suppression du projet');
+      enqueueSnackbar('Erreur lors de la suppression du projet', { variant: 'error' });
     }
   };
 
@@ -200,7 +202,7 @@ const ProjectsPage = () => {
       setShowModal(false);
       loadProjects(pagination.currentPage);
     } else {
-      alert('Erreur lors de la sauvegarde du projet');
+      enqueueSnackbar('Erreur lors de la sauvegarde du projet', { variant: 'error' });
     }
   };
 

@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -57,10 +59,32 @@ import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import backlogService from '../services/backlog.service';
-import Loading from '../components/Common/Loading';
+import DashboardSkeleton from '../components/Common/DashboardSkeleton';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import OccupationCalendar from '../components/Dashboard/OccupationCalendar';
 import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
+
+/**
+ * Récupère les données brutes du dashboard depuis le backend.
+ * Fonction pure utilisée par React Query (mise en cache automatique).
+ */
+const fetchDashboardData = async () => {
+  const [tasksResult, projectsResult, personsResult] = await Promise.all([
+    taskService.getAllTasks(0, 10000),
+    projectService.getAllProjects(0, 10000),
+    personService.getAllPersons(0, 10000),
+  ]);
+
+  if (!tasksResult.success || !projectsResult.success || !personsResult.success) {
+    throw new Error('Impossible de charger les données du tableau de bord');
+  }
+
+  return {
+    tasks: tasksResult.data.content || [],
+    projects: projectsResult.data.content || [],
+    persons: personsResult.data.content || [],
+  };
+};
 
 /**
  * Page du tableau de bord - Style Material UI 2025
@@ -68,48 +92,21 @@ import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectSt
 const Dashboard = () => {
   const navigate = useNavigate();
   const theme = useTheme();
+  const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
+
+  // --- React Query : chargement + cache automatique des données dashboard ---
+  const { data: dashboardRaw, isLoading, isError, refetch } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: fetchDashboardData,
+  });
+
+  const allTasks = useMemo(() => dashboardRaw?.tasks || [], [dashboardRaw]);
+  const allProjects = useMemo(() => dashboardRaw?.projects || [], [dashboardRaw]);
+  const allPersons = useMemo(() => dashboardRaw?.persons || [], [dashboardRaw]);
+
   const [activeTab, setActiveTab] = useState(0);
-  const [projectsData, setProjectsData] = useState({
-    totalProjects: 0,
-    activeProjects: 0,
-    completedProjects: 0,
-    projectsWithDelays: 0,
-    totalTasks: 0,
-    completedTasks: 0,
-    inProgressTasks: 0,
-    todoTasks: 0,
-    pendingTasks: 0,
-    todoEstimate: 0,
-    pendingEstimate: 0,
-    completionRate: 0,
-    averageTasksPerProject: 0,
-    projectsByStatus: {},
-    tasksByPriority: {},
-    projectDetails: [],
-  });
-  const [personsData, setPersonsData] = useState({
-    totalPersons: 0,
-    activePersons: 0,
-    totalTasksAssigned: 0,
-    completedTasksByPersons: 0,
-    inProgressTasksByPersons: 0,
-    todoTasksByPersons: 0,
-    pendingTasksByPersons: 0,
-    todoEstimateByPersons: 0,
-    pendingEstimateByPersons: 0,
-    averageTasksPerPerson: 0,
-    averageCompletionRate: 0,
-    personsWithOverload: 0,
-    personsWithNoTasks: 0,
-    personsWithLowActivity: 0,
-    topPerformers: [],
-    workloadDistribution: [],
-  });
-  const [allTasks, setAllTasks] = useState([]);
-  const [allPersons, setAllPersons] = useState([]);
-  const [allProjects, setAllProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [projectMetaMap, setProjectMetaMap] = useState({});
 
   // State for Edit Modal
   const [showModal, setShowModal] = useState(false);
@@ -125,69 +122,6 @@ const Dashboard = () => {
     deadLine: '',
     assignees: [],
   });
-
-  const loadDashboardData = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const [tasksResult, projectsResult, personsResult] = await Promise.all([
-        taskService.getAllTasks(0, 10000),
-        projectService.getAllProjects(0, 10000),
-        personService.getAllPersons(0, 10000),
-      ]);
-
-      if (tasksResult.success && projectsResult.success && personsResult.success) {
-        const tasks = tasksResult.data.content || [];
-        const projects = projectsResult.data.content || [];
-        const persons = personsResult.data.content || [];
-
-        setAllTasks(tasks);
-        setAllPersons(persons);
-        setAllProjects(projects);
-
-        calculateProjectKPIs(tasks, projects);
-        calculatePersonKPIs(tasks, persons);
-
-        // Charger les commentaires/liens directement sur les projets (non bloquant)
-        const nonCompletedProjects = projects
-          .filter(p => {
-            const pt = tasks.filter(t => t.projectId === p.id);
-            return calculateProjectStatus(pt) !== 'COMPLETED';
-          })
-          .slice(0, 10);
-
-        Promise.allSettled(
-          nonCompletedProjects.map(p => backlogService.getEntity('projects', p.id))
-        ).then(results => {
-          const map = {};
-          nonCompletedProjects.forEach((project, i) => {
-            const r = results[i];
-            if (r.status === 'fulfilled' && r.value.success) {
-              const data = r.value.data;
-              map[project.id] = {
-                totalComments: Array.isArray(data.comments) ? data.comments.length : 0,
-                totalLinks: Array.isArray(data.links) ? data.links.length : 0,
-              };
-            }
-          });
-          setProjectsData(prev => ({
-            ...prev,
-            projectDetails: prev.projectDetails.map(pd => ({
-              ...pd,
-              ...(map[pd.id] || {}),
-            })),
-          }));
-        });
-      } else {
-        setError('Impossible de charger les données du tableau de bord');
-      }
-    } catch (err) {
-      setError('Une erreur est survenue lors du chargement des données');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const calculateProjectKPIs = (tasks, projects) => {
     const totalProjects = projects.length;
@@ -365,7 +299,7 @@ const Dashboard = () => {
       };
     }).sort((a, b) => b.totalTasks - a.totalTasks);
 
-    setProjectsData({
+    return {
       totalProjects,
       activeProjects,
       completedProjects,
@@ -381,20 +315,23 @@ const Dashboard = () => {
       averageTasksPerProject,
       tasksByPriority,
       projectDetails,
-    });
+    };
   };
 
   const calculatePersonKPIs = (tasks, persons) => {
     const totalPersons = persons.length;
 
     if (totalPersons === 0) {
-      setPersonsData({
+      return {
         totalPersons: 0,
         activePersons: 0,
         totalTasksAssigned: 0,
         completedTasksByPersons: 0,
         inProgressTasksByPersons: 0,
         todoTasksByPersons: 0,
+        pendingTasksByPersons: 0,
+        todoEstimateByPersons: 0,
+        pendingEstimateByPersons: 0,
         averageTasksPerPerson: 0,
         averageCompletionRate: 0,
         personsWithOverload: 0,
@@ -402,8 +339,7 @@ const Dashboard = () => {
         personsWithLowActivity: 0,
         topPerformers: [],
         workloadDistribution: [],
-      });
-      return;
+      };
     }
 
     const personsByEmail = {};
@@ -531,7 +467,7 @@ const Dashboard = () => {
       })
       .sort((a, b) => b.activeTasks - a.activeTasks);
 
-    setPersonsData({
+    return {
       totalPersons,
       activePersons,
       totalTasksAssigned,
@@ -548,16 +484,60 @@ const Dashboard = () => {
       personsWithLowActivity,
       topPerformers,
       workloadDistribution,
-    });
+    };
   };
 
-  useEffect(() => {
-    loadDashboardData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // --- KPIs calculés depuis les données en cache (recalcul uniquement si données changent) ---
+  const projectsData = useMemo(() => {
+    const base = calculateProjectKPIs(allTasks, allProjects);
+    if (Object.keys(projectMetaMap).length === 0) return base;
+    return {
+      ...base,
+      projectDetails: base.projectDetails.map(pd => ({
+        ...pd,
+        ...(projectMetaMap[pd.id] || {}),
+      })),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTasks, allProjects, projectMetaMap]);
 
-  if (loading) return <Loading message="Chargement du tableau de bord..." />;
-  if (error) return <ErrorMessage message={error} onRetry={loadDashboardData} />;
+  const personsData = useMemo(
+    () => calculatePersonKPIs(allTasks, allPersons),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allTasks, allPersons]
+  );
+
+  // --- Fetch secondaire : commentaires/liens des projets actifs (non bloquant) ---
+  useEffect(() => {
+    if (allProjects.length === 0) return;
+    const nonCompleted = allProjects
+      .filter(p => {
+        const pt = allTasks.filter(t => t.projectId === p.id);
+        return calculateProjectStatus(pt) !== 'COMPLETED';
+      })
+      .slice(0, 10);
+
+    Promise.allSettled(
+      nonCompleted.map(p => backlogService.getEntity('projects', p.id))
+    ).then(results => {
+      const map = {};
+      nonCompleted.forEach((project, i) => {
+        const r = results[i];
+        if (r.status === 'fulfilled' && r.value.success) {
+          const data = r.value.data;
+          map[project.id] = {
+            totalComments: Array.isArray(data.comments) ? data.comments.length : 0,
+            totalLinks: Array.isArray(data.links) ? data.links.length : 0,
+          };
+        }
+      });
+      setProjectMetaMap(map);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProjects]);
+
+  if (isLoading) return <DashboardSkeleton />;
+  if (isError) return <ErrorMessage message="Impossible de charger les données du tableau de bord" onRetry={refetch} />;
 
   // Form Helpers
   const assigneeToArray = (assigneeString) => {
@@ -617,9 +597,9 @@ const Dashboard = () => {
 
     if (result.success) {
       setShowModal(false);
-      loadDashboardData(); // Refresh calendar data
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } else {
-      alert('Erreur lors de la sauvegarde de la tâche');
+      enqueueSnackbar('Erreur lors de la sauvegarde de la tâche', { variant: 'error' });
     }
   };
 

@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery, useQueryClient, useMutation, keepPreviousData } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 import { useSearchParams } from 'react-router-dom';
 import {
   Container,
@@ -60,12 +62,96 @@ import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import backlogService from '../services/backlog.service';
-import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
+import TaskListSkeleton, { KanbanBoardSkeleton } from '../components/Common/TaskSkeleton';
 import Pagination from '../components/Common/Pagination';
 import KanbanBoard from '../components/Tasks/KanbanBoard';
 import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
 import { format } from 'date-fns';
+
+/**
+ * Récupère les tâches selon les filtres actifs. Fonction pure pour React Query.
+ */
+const _assigneeToArray = (s) => (s ? s.split(',').map(e => e.trim()).filter(e => e) : []);
+
+const fetchTasksData = async ({ page, size, statusFilter, projectFilter, assigneeFilter, searchTerm, viewMode }) => {
+  const isKanbanMode = viewMode === 1;
+  const pageSize = isKanbanMode ? 1000 : size;
+  const currentPage = isKanbanMode ? 0 : page;
+
+  if (statusFilter.length > 0) {
+    const hasNoStatus = statusFilter.includes('no-status');
+    const realStatuses = statusFilter.filter(s => s !== 'no-status');
+    const promises = realStatuses.map(status => taskService.getAllTasks(0, 1000, searchTerm, `status:${status}`));
+    const results = await Promise.all(promises);
+    if (!results.every(r => r.success)) throw new Error('Impossible de charger les tâches');
+
+    let allTasks = results.flatMap(r => r.data.content || []);
+
+    if (hasNoStatus) {
+      const allResult = await taskService.getAllTasks(0, 1000, searchTerm, '');
+      if (allResult.success) {
+        const noStatus = (allResult.data.content || []).filter(t => !t.status || t.status === '');
+        allTasks = [...allTasks, ...noStatus];
+      }
+    }
+
+    let unique = Array.from(new Map(allTasks.map(t => [t.id, t])).values());
+    if (projectFilter) {
+      unique = projectFilter === 'no-project'
+        ? unique.filter(t => !t.projectId || t.projectId === '')
+        : unique.filter(t => t.projectId === projectFilter);
+    }
+    if (assigneeFilter.length > 0) {
+      unique = unique.filter(t => assigneeFilter.some(e => _assigneeToArray(t.assignee).includes(e)));
+    }
+
+    const total = unique.length;
+    if (isKanbanMode) return { tasks: unique, pagination: { currentPage: 0, totalPages: 1, totalElements: total, size: total } };
+    const totalPages = Math.ceil(total / pageSize);
+    return { tasks: unique.slice(currentPage * pageSize, (currentPage + 1) * pageSize), pagination: { currentPage, totalPages, totalElements: total, size: pageSize } };
+  }
+
+  if (projectFilter === 'no-project') {
+    const result = await taskService.getAllTasks(0, 1000, searchTerm, '');
+    if (!result.success) throw new Error(result.error || 'Impossible de charger les tâches');
+    let tasks = (result.data.content || []).filter(t => !t.projectId || t.projectId === '');
+    if (assigneeFilter.length > 0) {
+      tasks = tasks.filter(t => assigneeFilter.some(e => _assigneeToArray(t.assignee).includes(e)));
+    }
+    const total = tasks.length;
+    if (isKanbanMode) return { tasks, pagination: { currentPage: 0, totalPages: 1, totalElements: total, size: total } };
+    const totalPages = Math.ceil(total / pageSize);
+    return { tasks: tasks.slice(currentPage * pageSize, (currentPage + 1) * pageSize), pagination: { currentPage, totalPages, totalElements: total, size: pageSize } };
+  }
+
+  const filter = projectFilter ? `projectId:${projectFilter}` : '';
+
+  if (assigneeFilter.length > 0) {
+    const result = await taskService.getAllTasks(0, 1000, searchTerm, filter);
+    if (!result.success) throw new Error(result.error || 'Impossible de charger les tâches');
+    let tasks = (result.data.content || []).filter(t => assigneeFilter.some(e => _assigneeToArray(t.assignee).includes(e)));
+    const total = tasks.length;
+    if (isKanbanMode) return { tasks, pagination: { currentPage: 0, totalPages: 1, totalElements: total, size: total } };
+    const totalPages = Math.ceil(total / pageSize);
+    return { tasks: tasks.slice(currentPage * pageSize, (currentPage + 1) * pageSize), pagination: { currentPage, totalPages, totalElements: total, size: pageSize } };
+  }
+
+  const result = await taskService.getAllTasks(currentPage, pageSize, searchTerm, filter);
+  if (!result.success) throw new Error(result.error || 'Impossible de charger les tâches');
+  const data = result.data;
+  const tasks = data.content || [];
+  if (isKanbanMode) return { tasks, pagination: { currentPage: 0, totalPages: 1, totalElements: tasks.length, size: tasks.length } };
+  return {
+    tasks,
+    pagination: {
+      currentPage: data.number ?? data.currentPage ?? currentPage,
+      totalPages: data.totalPages ?? 0,
+      totalElements: data.totalElements ?? 0,
+      size: data.size ?? pageSize,
+    },
+  };
+};
 
 /**
  * Clé pour le localStorage
@@ -104,17 +190,8 @@ const savePreferences = (preferences) => {
 const TasksPage = () => {
   const theme = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tasks, setTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [persons, setPersons] = useState([]);
-  const [pagination, setPagination] = useState({
-    currentPage: 0,
-    totalPages: 0,
-    totalElements: 0,
-    size: 10,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
 
   // Charger les préférences sauvegardées
   const savedPreferences = loadPreferences();
@@ -171,6 +248,88 @@ const TasksPage = () => {
     links: [],
   });
 
+  // --- Pagination inputs (outputs viennent de la query) ---
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(savedPreferences?.pageSize || 10);
+  const [, setBulkLoading] = useState(false);
+
+  // Debounce de la recherche pour éviter des appels backend à chaque frappe
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(0);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Réinitialiser la page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, projectFilter, assigneeFilter, viewMode]);
+
+  // --- Projets (cached 5 min — change rarement) ---
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const r = await projectService.getAllProjects(0, 100);
+      if (!r.success) throw new Error('Impossible de charger les projets');
+      return r.data.content || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const projects = projectsData || [];
+
+  // --- Personnes (cached 5 min — change rarement) ---
+  const { data: personsData } = useQuery({
+    queryKey: ['persons'],
+    queryFn: async () => {
+      const r = await personService.getAllPersons(0, 1000);
+      if (!r.success) throw new Error('Impossible de charger les personnes');
+      return r.data.content || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const persons = personsData || [];
+
+  // --- Tâches (re-fetch sur changement de filtre/page, avec cache par combinaison) ---
+  const taskQueryParams = useMemo(() => ({
+    page: currentPage, size: pageSize,
+    statusFilter, projectFilter, assigneeFilter,
+    searchTerm: debouncedSearchTerm, viewMode,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [currentPage, pageSize, statusFilter, projectFilter, assigneeFilter, debouncedSearchTerm, viewMode]);
+
+  const { data: tasksQueryData, isLoading, isFetching, isError, error: tasksError } = useQuery({
+    queryKey: ['tasks', taskQueryParams],
+    queryFn: () => fetchTasksData(taskQueryParams),
+    placeholderData: keepPreviousData, // garde l'ancien affichage pendant le chargement de la page suivante
+  });
+
+  const tasks = tasksQueryData?.tasks || [];
+  const pagination = tasksQueryData?.pagination || { currentPage: 0, totalPages: 0, totalElements: 0, size: pageSize };
+
+  // --- Mutation : changement de statut avec optimistic update ---
+  const statusMutation = useMutation({
+    mutationFn: ({ taskId, task, newStatus }) =>
+      taskService.updateTask(taskId, { ...task, status: newStatus }),
+    onMutate: async ({ taskId, newStatus, currentQueryKey }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previous = queryClient.getQueryData(currentQueryKey);
+      queryClient.setQueryData(currentQueryKey, (old) => ({
+        ...old,
+        tasks: (old?.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t),
+      }));
+      return { previous, currentQueryKey };
+    },
+    onError: (_, __, context) => {
+      if (context?.previous) queryClient.setQueryData(context.currentQueryKey, context.previous);
+      enqueueSnackbar('Erreur lors de la mise à jour du statut', { variant: 'error' });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
   // Fonctions helper pour convertir assignee (backend) <-> assignees (frontend)
   const assigneeToArray = (assigneeString) => {
     if (!assigneeString) return [];
@@ -182,284 +341,7 @@ const TasksPage = () => {
     return assigneesArray.join(',');
   };
 
-  const loadTasks = async (page = 0, size = null) => {
-    setLoading(true);
-    setError('');
 
-    try {
-      // En mode Kanban, charger toutes les tâches (pas de pagination)
-      const isKanbanMode = viewMode === 1;
-      const pageSize = isKanbanMode ? 1000 : (size !== null ? size : pagination.size);
-      const currentPage = isKanbanMode ? 0 : page;
-
-      console.log('loadTasks called with:', { page: currentPage, size: pageSize, statusFilter, projectFilter, assigneeFilter, searchTerm, isKanbanMode });
-
-      // Si plusieurs status sont sélectionnés, faire plusieurs requêtes et combiner les résultats
-      if (statusFilter.length > 0) {
-        console.log('Filtrage avec statuts:', statusFilter);
-
-        // Séparer les filtres de statut réels et le filtre "no-status"
-        const hasNoStatus = statusFilter.includes('no-status');
-        const realStatuses = statusFilter.filter(s => s !== 'no-status');
-
-        // Faire une requête pour chaque statut sélectionné (sans le filtre de projet dans la requête)
-        const promises = realStatuses.map(status => {
-          const filter = `status:${status}`;
-          console.log('Requête avec filtre:', filter);
-          return taskService.getAllTasks(0, 1000, searchTerm, filter);
-        });
-
-        const results = await Promise.all(promises);
-        console.log('Résultats des requêtes:', results);
-
-        // Vérifier que toutes les requêtes ont réussi
-        const allSuccess = results.every(r => r.success);
-        if (!allSuccess) {
-          setError('Impossible de charger les tâches');
-          setLoading(false);
-          return;
-        }
-
-        // Combiner tous les résultats et dédupliquer par ID
-        let allTasks = results.flatMap(r => r.data.content || []);
-        console.log('Tâches combinées:', allTasks.length);
-
-        // Si "no-status" est sélectionné, récupérer toutes les tâches et filtrer celles sans statut
-        if (hasNoStatus) {
-          const allTasksResult = await taskService.getAllTasks(0, 1000, searchTerm, '');
-          if (allTasksResult.success) {
-            const noStatusTasks = (allTasksResult.data.content || []).filter(task => !task.status || task.status === '');
-            console.log('Tâches sans statut:', noStatusTasks.length);
-            allTasks = [...allTasks, ...noStatusTasks];
-          }
-        }
-
-        const uniqueTasks = Array.from(
-          new Map(allTasks.map(task => [task.id, task])).values()
-        );
-        console.log('Tâches uniques:', uniqueTasks.length);
-
-        // Filtrer par projet côté client
-        let filteredTasks = uniqueTasks;
-        if (projectFilter) {
-          if (projectFilter === 'no-project') {
-            filteredTasks = uniqueTasks.filter(task => !task.projectId || task.projectId === '');
-          } else {
-            filteredTasks = uniqueTasks.filter(task => task.projectId === projectFilter);
-          }
-        }
-        console.log('Tâches après filtre projet:', filteredTasks.length);
-
-        // Filtrer par assignee côté client
-        if (assigneeFilter.length > 0) {
-          filteredTasks = filteredTasks.filter(task => {
-            const taskAssignees = assigneeToArray(task.assignee);
-            // Vérifier si au moins un des assignees sélectionnés est dans la tâche
-            return assigneeFilter.some(email => taskAssignees.includes(email));
-          });
-        }
-        console.log('Tâches après filtre assignee:', filteredTasks.length);
-
-        // Pagination côté client
-        const totalElements = filteredTasks.length;
-
-        if (isKanbanMode) {
-          // En mode Kanban, afficher toutes les tâches sans pagination
-          setTasks(filteredTasks);
-          setPagination({
-            currentPage: 0,
-            totalPages: 1,
-            totalElements: totalElements,
-            size: totalElements,
-          });
-        } else {
-          // En mode Liste, paginer les résultats
-          const totalPages = Math.ceil(totalElements / pageSize);
-          const startIndex = currentPage * pageSize;
-          const endIndex = startIndex + pageSize;
-          const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
-
-          setTasks(paginatedTasks);
-          setPagination({
-            currentPage: currentPage,
-            totalPages: totalPages,
-            totalElements: totalElements,
-            size: pageSize,
-          });
-        }
-      } else {
-        // Aucun filtre de statut
-        if (projectFilter === 'no-project') {
-          // Cas spécial: récupérer toutes les tâches et filtrer celles sans projet côté client
-          const result = await taskService.getAllTasks(0, 1000, searchTerm, '');
-
-          if (result.success) {
-            const allTasks = result.data.content || [];
-            let noProjectTasks = allTasks.filter(task => !task.projectId || task.projectId === '');
-            console.log('Tâches sans projet:', noProjectTasks.length);
-
-            // Filtrer par assignee côté client
-            if (assigneeFilter.length > 0) {
-              noProjectTasks = noProjectTasks.filter(task => {
-                const taskAssignees = assigneeToArray(task.assignee);
-                return assigneeFilter.some(email => taskAssignees.includes(email));
-              });
-            }
-            console.log('Tâches après filtre assignee:', noProjectTasks.length);
-
-            // Pagination côté client
-            const totalElements = noProjectTasks.length;
-
-            if (isKanbanMode) {
-              setTasks(noProjectTasks);
-              setPagination({
-                currentPage: 0,
-                totalPages: 1,
-                totalElements: totalElements,
-                size: totalElements,
-              });
-            } else {
-              const totalPages = Math.ceil(totalElements / pageSize);
-              const startIndex = currentPage * pageSize;
-              const endIndex = startIndex + pageSize;
-              const paginatedTasks = noProjectTasks.slice(startIndex, endIndex);
-
-              setTasks(paginatedTasks);
-              setPagination({
-                currentPage: currentPage,
-                totalPages: totalPages,
-                totalElements: totalElements,
-                size: pageSize,
-              });
-            }
-          } else {
-            setError(result.error || 'Impossible de charger les tâches');
-          }
-        } else {
-          // Requête normale avec filtre de projet si présent
-          const filter = projectFilter ? `projectId:${projectFilter}` : '';
-
-          // Si le filtre assignee est actif, récupérer toutes les tâches pour filtrer côté client
-          if (assigneeFilter.length > 0) {
-            const result = await taskService.getAllTasks(0, 1000, searchTerm, filter);
-
-            if (result.success) {
-              let allTasks = result.data.content || [];
-
-              // Filtrer par assignee côté client
-              allTasks = allTasks.filter(task => {
-                const taskAssignees = assigneeToArray(task.assignee);
-                return assigneeFilter.some(email => taskAssignees.includes(email));
-              });
-              console.log('Tâches après filtre assignee:', allTasks.length);
-
-              // Pagination côté client
-              const totalElements = allTasks.length;
-
-              if (isKanbanMode) {
-                setTasks(allTasks);
-                setPagination({
-                  currentPage: 0,
-                  totalPages: 1,
-                  totalElements: totalElements,
-                  size: totalElements,
-                });
-              } else {
-                const totalPages = Math.ceil(totalElements / pageSize);
-                const startIndex = currentPage * pageSize;
-                const endIndex = startIndex + pageSize;
-                const paginatedTasks = allTasks.slice(startIndex, endIndex);
-
-                setTasks(paginatedTasks);
-                setPagination({
-                  currentPage: currentPage,
-                  totalPages: totalPages,
-                  totalElements: totalElements,
-                  size: pageSize,
-                });
-              }
-            } else {
-              setError(result.error || 'Impossible de charger les tâches');
-            }
-          } else {
-            // Aucun filtre assignee, pagination normale via l'API (ou toutes les tâches en mode Kanban)
-            const result = await taskService.getAllTasks(currentPage, pageSize, searchTerm, filter);
-
-            if (result.success) {
-              const allTasks = result.data.content || [];
-
-              if (isKanbanMode) {
-                setTasks(allTasks);
-                setPagination({
-                  currentPage: 0,
-                  totalPages: 1,
-                  totalElements: allTasks.length,
-                  size: allTasks.length,
-                });
-              } else {
-                setTasks(allTasks);
-
-                const apiCurrentPage = result.data.number ?? result.data.currentPage ?? currentPage;
-                const apiTotalPages = result.data.totalPages ?? 0;
-                const apiTotalElements = result.data.totalElements ?? 0;
-                const apiPageSize = result.data.size ?? pageSize;
-
-                console.log('Pagination data from API:', {
-                  apiCurrentPage,
-                  apiTotalPages,
-                  apiTotalElements,
-                  apiPageSize,
-                  rawData: result.data
-                });
-
-                setPagination({
-                  currentPage: apiCurrentPage,
-                  totalPages: apiTotalPages,
-                  totalElements: apiTotalElements,
-                  size: apiPageSize,
-                });
-              }
-            } else {
-              setError(result.error || 'Impossible de charger les tâches');
-            }
-          }
-        }
-      }
-    } catch (err) {
-      setError('Une erreur est survenue lors du chargement des tâches');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProjects = async () => {
-    const result = await projectService.getAllProjects(0, 100);
-    if (result.success) {
-      setProjects(result.data.content || []);
-    }
-  };
-
-  const loadPersons = async () => {
-    const result = await personService.getAllPersons(0, 1000);
-    if (result.success) {
-      setPersons(result.data.content || []);
-    }
-  };
-
-  useEffect(() => {
-    loadTasks();
-    loadProjects();
-    loadPersons();
-    // eslint-disable-next-line
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadTasks(0);
-    }, 500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line
-  }, [searchTerm, statusFilter, projectFilter, assigneeFilter, viewMode]);
 
   // Sauvegarder les préférences dans localStorage quand elles changent
   useEffect(() => {
@@ -474,20 +356,15 @@ const TasksPage = () => {
   }, [viewMode, searchTerm, projectFilter, statusFilter, assigneeFilter]);
 
   const handlePageChange = (page) => {
-    // Validation des limites de page
-    if (page < 0) {
-      return;
-    }
-    // Si totalPages est défini, vérifier la limite supérieure
-    if (pagination.totalPages > 0 && page >= pagination.totalPages) {
-      return;
-    }
-    loadTasks(page);
+    if (page < 0) return;
+    if (pagination.totalPages > 0 && page >= pagination.totalPages) return;
+    setCurrentPage(page);
   };
 
   const handlePageSizeChange = (newSize) => {
-    setPagination(prev => ({ ...prev, size: newSize }));
-    loadTasks(0, newSize); // Retourner à la première page avec la nouvelle taille
+    setPageSize(newSize);
+    setCurrentPage(0);
+    // eslint-disable-next-line no-unused-expressions
   };
 
   const handleCreateTask = () => {
@@ -538,14 +415,12 @@ const TasksPage = () => {
 
     const result = await taskService.deleteTask(id);
     if (result.success) {
-      // Si on supprime la dernière tâche de la page et qu'on n'est pas sur la première page,
-      // revenir à la page précédente
       const willBeEmpty = tasks.length === 1;
-      const notFirstPage = pagination.currentPage > 0;
-      const targetPage = willBeEmpty && notFirstPage ? pagination.currentPage - 1 : pagination.currentPage;
-      loadTasks(targetPage);
+      const notFirstPage = currentPage > 0;
+      if (willBeEmpty && notFirstPage) setCurrentPage(p => p - 1);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     } else {
-      alert('Erreur lors de la suppression de la tâche');
+      enqueueSnackbar('Erreur lors de la suppression de la tâche', { variant: 'error' });
     }
   };
 
@@ -576,9 +451,9 @@ const TasksPage = () => {
 
     if (result.success) {
       setShowModal(false);
-      loadTasks(pagination.currentPage);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     } else {
-      alert('Erreur lors de la sauvegarde de la tâche');
+      enqueueSnackbar('Erreur lors de la sauvegarde de la tâche', { variant: 'error' });
     }
   };
 
@@ -663,49 +538,32 @@ const TasksPage = () => {
     };
   };
 
-  const handleStatusChange = async (taskId, newStatus) => {
-    // Mise à jour optimiste de l'UI
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId ? { ...task, status: newStatus } : task
-      )
+  // Helper pour mise à jour optimiste du cache de tâches
+  const optimisticTaskUpdate = (taskId, updater) => {
+    const qk = ['tasks', taskQueryParams];
+    queryClient.setQueryData(qk, (old) => old
+      ? { ...old, tasks: old.tasks.map(t => t.id === taskId ? updater(t) : t) }
+      : old
     );
+    return qk;
+  };
 
-    // Appel API pour persister le changement
+  const handleStatusChange = (taskId, newStatus) => {
     const task = tasks.find(t => t.id === taskId);
-    const result = await taskService.updateTask(taskId, { ...task, status: newStatus });
-
-    if (!result.success) {
-      // Revenir à l'ancien statut en cas d'erreur
-      setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === taskId ? { ...t, status: task.status } : t
-        )
-      );
-      alert('Erreur lors de la mise à jour du statut');
-    }
+    if (!task) return;
+    statusMutation.mutate({ taskId, task, newStatus, currentQueryKey: ['tasks', taskQueryParams] });
   };
 
   const handleProjectChange = async (taskId, newProjectId) => {
-    // Mise à jour optimiste de l'UI
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId ? { ...task, projectId: newProjectId } : task
-      )
-    );
-
-    // Appel API pour persister le changement
     const task = tasks.find(t => t.id === taskId);
+    const qk = optimisticTaskUpdate(taskId, t => ({ ...t, projectId: newProjectId }));
     const result = await taskService.updateTask(taskId, { ...task, projectId: newProjectId });
-
     if (!result.success) {
-      // Revenir à l'ancien projet en cas d'erreur
-      setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === taskId ? { ...t, projectId: task.projectId } : t
-        )
+      queryClient.setQueryData(qk, (old) => old
+        ? { ...old, tasks: old.tasks.map(t => t.id === taskId ? { ...t, projectId: task.projectId } : t) }
+        : old
       );
-      alert('Erreur lors de la mise à jour du projet');
+      enqueueSnackbar('Erreur lors de la mise à jour du projet', { variant: 'error' });
     }
   };
 
@@ -724,58 +582,33 @@ const TasksPage = () => {
   const handleAddAssignee = async (taskId, email) => {
     const task = tasks.find(t => t.id === taskId);
     const currentAssignees = assigneeToArray(task.assignee);
-
-    if (currentAssignees.includes(email)) {
-      return; // Déjà assigné
-    }
-
+    if (currentAssignees.includes(email)) return;
     const newAssignees = [...currentAssignees, email];
-
-    // Mise à jour optimiste de l'UI (garder le format array pour l'affichage)
-    setTasks(prevTasks =>
-      prevTasks.map(t =>
-        t.id === taskId ? { ...t, assignee: arrayToAssignee(newAssignees) } : t
-      )
-    );
-
-    // Appel API avec le format backend (string)
-    const result = await taskService.updateTask(taskId, { ...task, assignee: arrayToAssignee(newAssignees) });
-
+    const newAssigneeStr = arrayToAssignee(newAssignees);
+    const qk = optimisticTaskUpdate(taskId, t => ({ ...t, assignee: newAssigneeStr }));
+    const result = await taskService.updateTask(taskId, { ...task, assignee: newAssigneeStr });
     if (!result.success) {
-      // Revenir à l'ancien état en cas d'erreur
-      setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === taskId ? { ...t, assignee: task.assignee } : t
-        )
+      queryClient.setQueryData(qk, (old) => old
+        ? { ...old, tasks: old.tasks.map(t => t.id === taskId ? { ...t, assignee: task.assignee } : t) }
+        : old
       );
-      alert('Erreur lors de l\'assignation');
+      enqueueSnackbar('Erreur lors de l\'assignation', { variant: 'error' });
     }
   };
 
   // Fonction pour retirer un assigné d'une tâche
   const handleRemoveAssignee = async (taskId, email) => {
     const task = tasks.find(t => t.id === taskId);
-    const currentAssignees = assigneeToArray(task.assignee);
-    const newAssignees = currentAssignees.filter(e => e !== email);
-
-    // Mise à jour optimiste de l'UI
-    setTasks(prevTasks =>
-      prevTasks.map(t =>
-        t.id === taskId ? { ...t, assignee: arrayToAssignee(newAssignees) } : t
-      )
-    );
-
-    // Appel API avec le format backend (string)
-    const result = await taskService.updateTask(taskId, { ...task, assignee: arrayToAssignee(newAssignees) });
-
+    const newAssignees = assigneeToArray(task.assignee).filter(e => e !== email);
+    const newAssigneeStr = arrayToAssignee(newAssignees);
+    const qk = optimisticTaskUpdate(taskId, t => ({ ...t, assignee: newAssigneeStr }));
+    const result = await taskService.updateTask(taskId, { ...task, assignee: newAssigneeStr });
     if (!result.success) {
-      // Revenir à l'ancien état en cas d'erreur
-      setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === taskId ? { ...t, assignee: task.assignee } : t
-        )
+      queryClient.setQueryData(qk, (old) => old
+        ? { ...old, tasks: old.tasks.map(t => t.id === taskId ? { ...t, assignee: task.assignee } : t) }
+        : old
       );
-      alert('Erreur lors de la désassignation');
+      enqueueSnackbar('Erreur lors de la désassignation', { variant: 'error' });
     }
   };
 
@@ -862,60 +695,56 @@ const TasksPage = () => {
 
   const handleBulkDelete = async () => {
     if (!window.confirm(`Êtes-vous sûr de vouloir supprimer ${selectedTasks.length} tâches ?`)) return;
-
-    setLoading(true);
+    setBulkLoading(true);
     try {
       await Promise.all(selectedTasks.map(id => taskService.deleteTask(id)));
       setSelectedTasks([]);
-      loadTasks(pagination.currentPage);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     } catch (err) {
-      alert('Erreur lors de la suppression en masse');
+      enqueueSnackbar('Erreur lors de la suppression en masse', { variant: 'error' });
     } finally {
-      setLoading(false);
+      setBulkLoading(false);
     }
   };
 
   const handleBulkStatusChange = async (newStatus) => {
     if (!newStatus) return;
-    setLoading(true);
+    setBulkLoading(true);
     try {
       await Promise.all(selectedTasks.map(async (id) => {
         const task = tasks.find(t => t.id === id);
-        if (task) {
-          return taskService.updateTask(id, { ...task, status: newStatus });
-        }
+        if (task) return taskService.updateTask(id, { ...task, status: newStatus });
         return Promise.resolve();
       }));
       setSelectedTasks([]);
-      loadTasks(pagination.currentPage);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     } catch (err) {
-      alert('Erreur lors de la mise à jour en masse');
+      enqueueSnackbar('Erreur lors de la mise à jour en masse', { variant: 'error' });
     } finally {
-      setLoading(false);
+      setBulkLoading(false);
     }
   };
 
   const handleBulkAssign = async (email) => {
     if (!email) return;
-    setLoading(true);
+    setBulkLoading(true);
     try {
       await Promise.all(selectedTasks.map(async (id) => {
         const task = tasks.find(t => t.id === id);
         if (task) {
-          const currentAssignees = assigneeToArray(task.assignee);
-          if (!currentAssignees.includes(email)) {
-            const newAssignees = [...currentAssignees, email];
-            return taskService.updateTask(id, { ...task, assignee: arrayToAssignee(newAssignees) });
+          const current = assigneeToArray(task.assignee);
+          if (!current.includes(email)) {
+            return taskService.updateTask(id, { ...task, assignee: arrayToAssignee([...current, email]) });
           }
         }
         return Promise.resolve();
       }));
       setSelectedTasks([]);
-      loadTasks(pagination.currentPage);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     } catch (err) {
-      alert('Erreur lors de l\'assignation en masse');
+      enqueueSnackbar('Erreur lors de l\'assignation en masse', { variant: 'error' });
     } finally {
-      setLoading(false);
+      setBulkLoading(false);
     }
   };
 
@@ -935,7 +764,8 @@ const TasksPage = () => {
     setSearchParams(params);
   };
 
-  if (loading && tasks.length === 0) return <Loading message="Chargement des tâches..." />;
+  if (isLoading) return viewMode === 1 ? <KanbanBoardSkeleton /> : <TaskListSkeleton />;
+  if (isError) return <ErrorMessage message={tasksError?.message || 'Erreur lors du chargement des tâches'} onRetry={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} />;
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -1384,7 +1214,7 @@ const TasksPage = () => {
         </Stack>
       </Paper>
 
-      {error && <ErrorMessage message={error} onRetry={() => loadTasks(pagination.currentPage)} />}
+      {isFetching && <Box sx={{ height: 3, width: '100%', background: 'linear-gradient(90deg, transparent, primary.main, transparent)', animation: 'pulse 1.5s infinite' }} />}
 
       {/* Vue Liste */}
       {viewMode === 0 && (
@@ -1710,7 +1540,7 @@ const TasksPage = () => {
           </TableBody>
         </Table>
 
-        {tasks.length === 0 && !loading && (
+        {tasks.length === 0 && !isLoading && !isFetching && (
           <Box sx={{ p: 8, textAlign: 'center' }}>
             <AssignmentIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
             <Typography variant="h6" color="text.secondary">
@@ -1739,7 +1569,7 @@ const TasksPage = () => {
         currentPage={pagination.currentPage}
         totalPages={pagination.totalPages}
         totalElements={pagination.totalElements}
-        pageSize={pagination.size}
+        pageSize={pageSize}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         />
