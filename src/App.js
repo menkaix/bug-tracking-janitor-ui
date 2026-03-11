@@ -3,6 +3,9 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { SnackbarProvider } from 'notistack';
+import { queryClient } from './queryClient';
 import { apiService } from './services/api.service';
 import logger from './services/logger.service';
 import ApiKeyLogin from './components/ApiKeyLogin';
@@ -87,32 +90,40 @@ function App() {
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <Navbar onLogout={handleLogout} />
-          <Box
-            component="main"
-            sx={{
-              flexGrow: 1,
-              backgroundColor: 'background.default',
-              pt: 3,
-              pb: 4,
-            }}
-          >
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/projects" element={<ProjectsPage />} />
-              <Route path="/persons" element={<PersonsPage />} />
-              <Route path="/feature-tree" element={<FeatureTreePage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Box>
-        </Box>
-      </Router>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <SnackbarProvider
+        maxSnack={3}
+        autoHideDuration={4000}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <Router>
+            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+              <Navbar onLogout={handleLogout} />
+              <Box
+                component="main"
+                sx={{
+                  flexGrow: 1,
+                  backgroundColor: 'background.default',
+                  pt: 3,
+                  pb: 4,
+                }}
+              >
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/tasks" element={<TasksPage />} />
+                  <Route path="/projects" element={<ProjectsPage />} />
+                  <Route path="/persons" element={<PersonsPage />} />
+                  <Route path="/feature-tree" element={<FeatureTreePage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Box>
+            </Box>
+          </Router>
+        </ThemeProvider>
+      </SnackbarProvider>
+    </QueryClientProvider>
   );
 }
 

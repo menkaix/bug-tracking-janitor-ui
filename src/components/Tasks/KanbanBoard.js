@@ -11,6 +11,7 @@ import {
   Tooltip,
   Select,
   MenuItem,
+  Button,
   alpha,
   useTheme,
 } from '@mui/material';
@@ -49,7 +50,7 @@ const STATUS_OPTIONS = [
   { value: 'canceled', label: 'Annulé' },
 ];
 
-const TaskCard = ({ task, persons, onEdit, onDelete, onStatusChange, isDragging = false }) => {
+const TaskCard = React.memo(({ task, persons, onEdit, onDelete, onStatusChange, isDragging = false }) => {
   const theme = useTheme();
 
   const {
@@ -225,16 +226,22 @@ const TaskCard = ({ task, persons, onEdit, onDelete, onStatusChange, isDragging 
       </CardContent>
     </Card>
   );
-};
+});
 
 /**
  * Composant pour une colonne Kanban
  */
-const KanbanColumn = ({ status, label, icon, color, tasks, persons, onEdit, onDelete, onStatusChange }) => {
+const COLUMN_PAGE_SIZE = 20;
+
+const KanbanColumn = React.memo(({ status, label, icon, color, tasks, persons, onEdit, onDelete, onStatusChange }) => {
   const theme = useTheme();
   const { setNodeRef, isOver } = useDroppable({
     id: status,
   });
+  const [visibleCount, setVisibleCount] = useState(COLUMN_PAGE_SIZE);
+
+  const visibleTasks = tasks.slice(0, visibleCount);
+  const hasMore = tasks.length > visibleCount;
 
   return (
     <Paper
@@ -276,8 +283,8 @@ const KanbanColumn = ({ status, label, icon, color, tasks, persons, onEdit, onDe
 
       {/* Liste des tâches */}
       <Box sx={{ overflowY: 'auto', flex: 1 }}>
-        <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
+        <SortableContext items={visibleTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          {visibleTasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
@@ -300,16 +307,29 @@ const KanbanColumn = ({ status, label, icon, color, tasks, persons, onEdit, onDe
             <Typography variant="caption">Aucune tâche</Typography>
           </Box>
         )}
+
+        {hasMore && (
+          <Button
+            size="small"
+            fullWidth
+            onClick={() => setVisibleCount(c => c + COLUMN_PAGE_SIZE)}
+            sx={{ mt: 1, fontSize: '0.75rem' }}
+          >
+            Voir plus ({tasks.length - visibleCount} restantes)
+          </Button>
+        )}
       </Box>
     </Paper>
   );
-};
+});
 
 /**
  * Composant principal du Kanban Board
  */
 const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange }) => {
   const [activeId, setActiveId] = useState(null);
+  // Optimistic local state : appliqué immédiatement pendant le drag, avant que le parent confirme
+  const [localOverrides, setLocalOverrides] = useState({});
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -379,21 +399,25 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
     },
   ];
 
+  // Tâches avec overrides locaux appliqués pour le retour visuel immédiat
+  const tasksWithOverrides = tasks.map(t =>
+    localOverrides[t.id] !== undefined ? { ...t, status: localOverrides[t.id] } : t
+  );
+
   // Organiser les tâches par colonne
   const getTasksForColumn = (column) => {
     if (column.id === 'others') {
-      // Colonne "Autres" : tâches sans statut ou avec statut non standard
       const standardStatuses = columns
         .filter(c => c.id !== 'others')
         .flatMap(c => c.statusValues);
 
-      return tasks.filter(task => {
+      return tasksWithOverrides.filter(task => {
         const taskStatus = task.status || '';
         return !taskStatus || !standardStatuses.includes(taskStatus);
       });
     }
 
-    return tasks.filter(task => column.statusValues.includes(task.status));
+    return tasksWithOverrides.filter(task => column.statusValues.includes(task.status));
   };
 
   const handleDragStart = (event) => {
@@ -433,20 +457,25 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
     }
 
     if (targetColumn) {
-      // Déterminer le nouveau statut
       let newStatus;
       if (targetColumn.id === 'others') {
-        newStatus = ''; // Pas de statut
+        newStatus = '';
       } else if (targetColumn.statusValues.length === 1) {
         newStatus = targetColumn.statusValues[0];
       } else {
-        // Si la colonne a plusieurs statuts, prendre le premier
         newStatus = targetColumn.statusValues[0];
       }
 
-      // Mettre à jour le statut si différent
       if (task.status !== newStatus) {
+        // Retour visuel immédiat (avant confirmation backend)
+        setLocalOverrides(prev => ({ ...prev, [taskId]: newStatus }));
         onStatusChange(taskId, newStatus);
+        // Nettoyer l'override local après que le parent a mis à jour son état
+        setTimeout(() => setLocalOverrides(prev => {
+          const next = { ...prev };
+          delete next[taskId];
+          return next;
+        }), 2000);
       }
     }
 
@@ -457,7 +486,7 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
     setActiveId(null);
   };
 
-  const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
+  const activeTask = activeId ? tasksWithOverrides.find(t => t.id === activeId) : null;
 
   return (
     <DndContext

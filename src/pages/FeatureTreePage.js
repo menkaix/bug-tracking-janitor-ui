@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSnackbar } from 'notistack';
 import { useSearchParams } from 'react-router-dom';
 import {
   Container,
@@ -216,7 +217,7 @@ const TaskStatusSelect = ({ task, onRefresh }) => {
   const handleChange = async (e) => {
     e.stopPropagation();
     setLoading(true);
-    await taskService.patchTask(task.id, { status: e.target.value });
+    await taskService.patchTask(task.id, { status: e.target.value }, task);
     setLoading(false);
     onRefresh();
   };
@@ -251,7 +252,7 @@ const BulkStatusMenu = ({ tasks, onRefresh, label }) => {
   const handleApply = async (status) => {
     setAnchor(null);
     setLoading(true);
-    await Promise.all(tasks.map((t) => taskService.patchTask(t.id, { status })));
+    await Promise.all(tasks.map((t) => taskService.patchTask(t.id, { status }, t)));
     setLoading(false);
     onRefresh();
   };
@@ -305,7 +306,7 @@ const BulkAssignMenu = ({ tasks, persons, onRefresh }) => {
   const handleAssign = async (email) => {
     setAnchor(null);
     setLoading(true);
-    await Promise.all(tasks.map((t) => taskService.patchTask(t.id, { assignee: email })));
+    await Promise.all(tasks.map((t) => taskService.patchTask(t.id, { assignee: email }, t)));
     setLoading(false);
     onRefresh();
   };
@@ -629,6 +630,7 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
 // ─── Dialogs d'édition (AbstractEntity) ──────────────────────────────────────
 
 const StoryEditDialog = ({ open, onClose, onSave, featureTypes }) => {
+  const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({ action: '', scenario: '', objective: '', comments: [], links: [] });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -667,7 +669,7 @@ const StoryEditDialog = ({ open, onClose, onSave, featureTypes }) => {
     const r2 = await backlogService.patchEntity('stories', storyId, { comments: form.comments, links: form.links });
     setSaving(false);
     if (r1.success) { onSave(); handleClose(); }
-    else alert(`Erreur : ${r1.error || r2.error}`);
+    else enqueueSnackbar(`Erreur : ${r1.error || r2.error}`, { variant: 'error' });
   };
 
   return (
@@ -711,6 +713,7 @@ const StoryEditDialog = ({ open, onClose, onSave, featureTypes }) => {
 };
 
 const FeatureEditDialog = ({ open, onClose, onSave, featureTypes, featureTypesLoading }) => {
+  const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({ name: '', description: '', type: '', comments: [], links: [] });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -750,7 +753,7 @@ const FeatureEditDialog = ({ open, onClose, onSave, featureTypes, featureTypesLo
     });
     setSaving(false);
     if (result.success) { onSave(); handleClose(); }
-    else alert(`Erreur : ${result.error}`);
+    else enqueueSnackbar(`Erreur : ${result.error}`, { variant: 'error' });
   };
 
   return (
@@ -1076,6 +1079,7 @@ const CreateTaskDialog = ({ open, onClose, onSave, feature, persons, submitting 
 
 const FeatureTreePage = () => {
   const theme = useTheme();
+  const { enqueueSnackbar } = useSnackbar();
   const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -1178,7 +1182,7 @@ const FeatureTreePage = () => {
       setActorDialog(false);
       fetchTree(treeData.code);
     } else {
-      alert(`Erreur : ${result.error}`);
+      enqueueSnackbar(`Erreur : ${result.error}`, { variant: 'error' });
     }
   };
 
@@ -1190,7 +1194,7 @@ const FeatureTreePage = () => {
       setStoryDialog({ open: false, actor: null });
       fetchTree(treeData.code);
     } else {
-      alert(`Erreur : ${result.error}`);
+      enqueueSnackbar(`Erreur : ${result.error}`, { variant: 'error' });
     }
   };
 
@@ -1202,7 +1206,7 @@ const FeatureTreePage = () => {
       setFeatureDialog({ open: false, story: null });
       fetchTree(treeData.code);
     } else {
-      alert(`Erreur : ${result.error}`);
+      enqueueSnackbar(`Erreur : ${result.error}`, { variant: 'error' });
     }
   };
 
@@ -1223,7 +1227,7 @@ const FeatureTreePage = () => {
       setCreateTaskDialog(null);
       fetchTree(treeData.code);
     } else {
-      alert(`Erreur : ${result.error}`);
+      enqueueSnackbar(`Erreur : ${result.error}`, { variant: 'error' });
     }
   };
 

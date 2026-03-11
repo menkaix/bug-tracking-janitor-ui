@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSnackbar } from 'notistack';
 import {
   Container,
   Typography,
@@ -43,6 +44,7 @@ import Pagination from '../components/Common/Pagination';
 
 function PersonsPage() {
   const theme = useTheme();
+  const { enqueueSnackbar } = useSnackbar();
   // États pour la liste des personnes
   const [persons, setPersons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -184,7 +186,7 @@ function PersonsPage() {
 
     // Validation de l'email
     if (!formData.email || !formData.email.trim()) {
-      alert('L\'email est obligatoire');
+      enqueueSnackbar('L\'email est obligatoire', { variant: 'warning' });
       return;
     }
 
@@ -204,11 +206,11 @@ function PersonsPage() {
         handleCloseModal();
         fetchPersons(pagination.currentPage, pagination.size);
       } else {
-        alert(result.error || 'Erreur lors de l\'opération');
+        enqueueSnackbar(result.error || 'Erreur lors de l\'opération', { variant: 'error' });
       }
     } catch (err) {
       logger.error('Error in handleSubmit:', err);
-      alert('Erreur lors de l\'opération');
+      enqueueSnackbar('Erreur lors de l\'opération', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -232,11 +234,11 @@ function PersonsPage() {
           fetchPersons(pagination.currentPage, pagination.size);
         }
       } else {
-        alert(result.error || 'Erreur lors de la suppression');
+        enqueueSnackbar(result.error || 'Erreur lors de la suppression', { variant: 'error' });
       }
     } catch (err) {
       logger.error('Error in handleDelete:', err);
-      alert('Erreur lors de la suppression');
+      enqueueSnackbar('Erreur lors de la suppression', { variant: 'error' });
     } finally {
       setLoading(false);
     }

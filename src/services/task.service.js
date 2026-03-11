@@ -78,15 +78,23 @@ const taskService = {
   },
 
   /**
-   * Met à jour partiellement une tâche via GET + PUT (PATCH non supporté par le gateway)
+   * Met à jour partiellement une tâche via PUT.
+   * Si cachedTask est fourni (depuis le cache React Query), évite le GET préalable.
    * @param {string} id - ID de la tâche
    * @param {Object} patch - Champs à mettre à jour (ex: { status: 'done' })
+   * @param {Object|null} cachedTask - Données complètes de la tâche depuis le cache (optionnel)
    */
-  patchTask: async (id, patch) => {
+  patchTask: async (id, patch, cachedTask = null) => {
     try {
-      logger.info('Patching task (GET+PUT)', { id, patch });
-      const getResponse = await apiClient.get(`/task/${id}`);
-      const fullTask = getResponse.data;
+      let fullTask;
+      if (cachedTask) {
+        logger.info('Patching task (cache+PUT)', { id, patch });
+        fullTask = cachedTask;
+      } else {
+        logger.info('Patching task (GET+PUT)', { id, patch });
+        const getResponse = await apiClient.get(`/task/${id}`);
+        fullTask = getResponse.data;
+      }
       const response = await apiClient.put(`/task/${id}`, { ...fullTask, ...patch });
       logger.info('Task patched successfully', { id });
       return { success: true, data: response.data };
