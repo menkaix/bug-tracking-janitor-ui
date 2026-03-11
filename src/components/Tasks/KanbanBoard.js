@@ -9,6 +9,8 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Select,
+  MenuItem,
   alpha,
   useTheme,
 } from '@mui/material';
@@ -36,7 +38,18 @@ import { format } from 'date-fns';
 /**
  * Composant pour une carte de tâche draggable
  */
-const TaskCard = ({ task, persons, onEdit, onDelete, isDragging = false }) => {
+const STATUS_OPTIONS = [
+  { value: '', label: 'Autres' },
+  { value: 'to-study', label: 'À étudier' },
+  { value: 'todo', label: 'À faire' },
+  { value: 'in-progress', label: 'En cours' },
+  { value: 'to-test', label: 'À tester' },
+  { value: 'done', label: 'Terminé' },
+  { value: 'pending', label: 'En attente' },
+  { value: 'canceled', label: 'Annulé' },
+];
+
+const TaskCard = ({ task, persons, onEdit, onDelete, onStatusChange, isDragging = false }) => {
   const theme = useTheme();
 
   const {
@@ -181,6 +194,33 @@ const TaskCard = ({ task, persons, onEdit, onDelete, isDragging = false }) => {
               </Tooltip>
             </Stack>
           </Stack>
+
+          {/* Sélecteur de statut */}
+          <Box
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <Select
+              value={task.status || ''}
+              onChange={(e) => onStatusChange(task.id, e.target.value)}
+              size="small"
+              fullWidth
+              variant="outlined"
+              sx={{
+                fontSize: '0.75rem',
+                '& .MuiSelect-select': { py: 0.5, px: 1 },
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: alpha(theme.palette.divider, 0.5),
+                },
+              }}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: '0.8rem' }}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
         </Stack>
       </CardContent>
     </Card>
@@ -190,7 +230,7 @@ const TaskCard = ({ task, persons, onEdit, onDelete, isDragging = false }) => {
 /**
  * Composant pour une colonne Kanban
  */
-const KanbanColumn = ({ status, label, icon, color, tasks, persons, onEdit, onDelete }) => {
+const KanbanColumn = ({ status, label, icon, color, tasks, persons, onEdit, onDelete, onStatusChange }) => {
   const theme = useTheme();
   const { setNodeRef, isOver } = useDroppable({
     id: status,
@@ -244,6 +284,7 @@ const KanbanColumn = ({ status, label, icon, color, tasks, persons, onEdit, onDe
               persons={persons}
               onEdit={onEdit}
               onDelete={onDelete}
+              onStatusChange={onStatusChange}
             />
           ))}
         </SortableContext>
@@ -448,6 +489,7 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
                 persons={persons}
                 onEdit={onEditTask}
                 onDelete={onDeleteTask}
+                onStatusChange={onStatusChange}
               />
             </Box>
           );
