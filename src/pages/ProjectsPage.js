@@ -69,7 +69,7 @@ const ProjectsPage = () => {
     currentPage: 0,
     totalPages: 0,
     totalElements: 0,
-    size: 10,
+    size: 100,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

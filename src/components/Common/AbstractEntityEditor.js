@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Box,
   Tabs,
@@ -41,8 +42,8 @@ const formatDate = (date) => {
   }
 };
 
-const authorInitials = (author = '') =>
-  author
+const authorInitials = (author) =>
+  (author || '')
     .split(' ')
     .map((w) => w[0])
     .join('')
@@ -99,8 +100,46 @@ const CommentsPanel = ({ comments = [], onChange }) => {
                       <Typography variant="caption" color="text.secondary">{formatDate(c.createDate)}</Typography>
                     </Stack>
                   }
-                  secondary={c.text}
-                  secondaryTypographyProps={{ variant: 'body2', sx: { mt: 0.25 } }}
+                  secondary={
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'block',
+                        mt: 0.25,
+                        fontSize: '0.875rem',
+                        color: 'text.secondary',
+                        '& p': { m: 0 },
+                        '& p + p': { mt: 0.5 },
+                        '& ul, & ol': { pl: 2, my: 0.25 },
+                        '& li': { mb: 0 },
+                        '& code': {
+                          fontFamily: 'monospace',
+                          fontSize: '0.8em',
+                          bgcolor: 'action.hover',
+                          px: 0.5,
+                          borderRadius: 0.5,
+                        },
+                        '& pre': {
+                          bgcolor: 'action.hover',
+                          p: 1,
+                          borderRadius: 1,
+                          overflow: 'auto',
+                          fontSize: '0.8em',
+                        },
+                        '& a': { color: 'primary.main' },
+                        '& strong': { fontWeight: 600 },
+                        '& blockquote': {
+                          borderLeft: '3px solid',
+                          borderColor: 'divider',
+                          pl: 1,
+                          ml: 0,
+                          color: 'text.disabled',
+                        },
+                      }}
+                    >
+                      <ReactMarkdown>{c.text}</ReactMarkdown>
+                    </Box>
+                  }
                 />
                 <ListItemSecondaryAction>
                   <IconButton size="small" onClick={() => handleDelete(c)} color="error">
