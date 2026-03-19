@@ -36,8 +36,7 @@ import {
   Link as LinkIcon,
   AccountTree as TreeIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { formatDateLong } from '../utils/dateUtils';
 import projectService from '../services/project.service';
 import taskService from '../services/task.service';
 import backlogService from '../services/backlog.service';
@@ -47,14 +46,7 @@ import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
 import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
 
-const formatDate = (date) => {
-  if (!date) return null;
-  try {
-    return format(new Date(date), 'dd MMM yyyy', { locale: fr });
-  } catch {
-    return null;
-  }
-};
+const formatDate = formatDateLong;
 
 /**
  * Page de gestion des projets - Material UI 2025

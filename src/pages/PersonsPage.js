@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import personService from '../services/person.service';
 import logger from '../services/logger.service';
+import { formatDateLong } from '../utils/dateUtils';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
@@ -252,16 +253,7 @@ function PersonsPage() {
     });
   };
 
-  // Formater la date
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+  const formatDate = (d) => formatDateLong(d) ?? 'N/A';
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>

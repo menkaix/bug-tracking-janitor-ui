@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -17,6 +17,37 @@ import PersonsPage from './pages/PersonsPage';
 import FeatureTreePage from './pages/FeatureTreePage';
 import theme from './theme/theme';
 import './App.css';
+
+/**
+ * Capture les erreurs React non gérées et affiche un écran de secours.
+ */
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', p: 4 }}>
+          <Typography variant="h5" color="error" gutterBottom>Une erreur inattendue s'est produite</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{this.state.error?.message}</Typography>
+          <button onClick={() => this.setState({ hasError: false, error: null })}>Réessayer</button>
+        </Box>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * Composant principal de l'application
@@ -90,6 +121,7 @@ function App() {
   }
 
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <SnackbarProvider
         maxSnack={3}
@@ -124,6 +156,7 @@ function App() {
         </ThemeProvider>
       </SnackbarProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

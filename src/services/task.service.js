@@ -1,5 +1,8 @@
 import { apiClient } from './api.service';
 import logger from './logger.service';
+import { API_ENDPOINTS } from '../config/api.config';
+
+const API_URL = API_ENDPOINTS.TASKS;
 
 /**
  * Service pour la gestion des tâches
@@ -19,7 +22,7 @@ const taskService = {
       if (filter) params.filter = filter;
 
       logger.debug('Fetching tasks', { page, size, search, filter });
-      const response = await apiClient.get('/task', { params });
+      const response = await apiClient.get(API_URL, { params });
       logger.info('Tasks fetched successfully', { count: response.data?.content?.length || 0 });
       return { success: true, data: response.data };
     } catch (error) {
@@ -35,7 +38,7 @@ const taskService = {
   getTaskById: async (id) => {
     try {
       logger.debug('Fetching task by ID', { id });
-      const response = await apiClient.get(`/task/${id}`);
+      const response = await apiClient.get(`${API_URL}/${id}`);
       logger.info('Task fetched successfully', { id });
       return { success: true, data: response.data };
     } catch (error) {
@@ -51,7 +54,7 @@ const taskService = {
   createTask: async (task) => {
     try {
       logger.info('Creating new task', { title: task.title, status: task.status });
-      const response = await apiClient.post('/task', task);
+      const response = await apiClient.post(API_URL, task);
       logger.info('Task created successfully', { id: response.data?.id });
       return { success: true, data: response.data };
     } catch (error) {
@@ -68,7 +71,7 @@ const taskService = {
   updateTask: async (id, task) => {
     try {
       logger.info('Updating task', { id, title: task.title, status: task.status });
-      const response = await apiClient.put(`/task/${id}`, task);
+      const response = await apiClient.put(`${API_URL}/${id}`, task);
       logger.info('Task updated successfully', { id });
       return { success: true, data: response.data };
     } catch (error) {
@@ -92,10 +95,10 @@ const taskService = {
         fullTask = cachedTask;
       } else {
         logger.info('Patching task (GET+PUT)', { id, patch });
-        const getResponse = await apiClient.get(`/task/${id}`);
+        const getResponse = await apiClient.get(`${API_URL}/${id}`);
         fullTask = getResponse.data;
       }
-      const response = await apiClient.put(`/task/${id}`, { ...fullTask, ...patch });
+      const response = await apiClient.put(`${API_URL}/${id}`, { ...fullTask, ...patch });
       logger.info('Task patched successfully', { id });
       return { success: true, data: response.data };
     } catch (error) {
@@ -111,7 +114,7 @@ const taskService = {
   deleteTask: async (id) => {
     try {
       logger.info('Deleting task', { id });
-      await apiClient.delete(`/task/${id}`);
+      await apiClient.delete(`${API_URL}/${id}`);
       logger.info('Task deleted successfully', { id });
       return { success: true };
     } catch (error) {
