@@ -40,6 +40,13 @@ const sortByStatus = (a, b) => {
   return orderA - orderB;
 };
 
+// Fonction pure extraite pour éviter sa recréation à chaque render
+const getInitials = (person) => {
+  const first = person.firstName?.[0] || '';
+  const last = person.lastName?.[0] || '';
+  return (first + last).toUpperCase() || '?';
+};
+
 const OccupationMap = ({ tasks = [], persons = [], projects = [], onTaskClick }) => {
   const theme = useTheme();
 
@@ -64,12 +71,6 @@ const OccupationMap = ({ tasks = [], persons = [], projects = [], onTaskClick })
       })
       .sort((a, b) => b.activeTasks.length - a.activeTasks.length);
   }, [persons, tasks]);
-
-  const initials = (person) => {
-    const first = person.firstName?.[0] || '';
-    const last = person.lastName?.[0] || '';
-    return (first + last).toUpperCase() || '?';
-  };
 
   if (rows.length === 0) {
     return (
@@ -109,7 +110,7 @@ const OccupationMap = ({ tasks = [], persons = [], projects = [], onTaskClick })
                     fontWeight: 600,
                   }}
                 >
-                  {initials(person)}
+                  {getInitials(person)}
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="subtitle2" fontWeight={600} noWrap>

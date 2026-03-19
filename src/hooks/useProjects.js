@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useConfirm } from './useConfirm';
 import projectService from '../services/project.service';
 import taskService from '../services/task.service';
 import backlogService from '../services/backlog.service';
 import { calculateProjectStatus } from '../utils/projectStatus';
+import { FETCH_LIMITS } from '../config/api.config';
 
 const EMPTY_PROJECT_FORM = {
   projectName: '',
@@ -15,76 +18,108 @@ const EMPTY_PROJECT_FORM = {
 };
 
 /**
- * Controller hook pour la page Projets.
+ * Controller hook pour la page Projets — React Query + useMutation.
  */
 export const useProjects = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
+  const queryClient = useQueryClient();
 
-  const [projects, setProjects] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(100);
   const [searchTerm, setSearchTerm] = useState('');
-
-  const [pagination, setPagination] = useState({
-    currentPage: 0,
-    totalPages: 0,
-    totalElements: 0,
-    size: 100,
-  });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [formData, setFormData] = useState({ ...EMPTY_PROJECT_FORM });
 
-  const loadProjects = async (page = 0, size = pagination.size) => {
-    setLoading(true);
-    setError('');
-    try {
-      const [projectsResult, tasksResult] = await Promise.all([
-        projectService.getAllProjects(page, size, searchTerm),
-        taskService.getAllTasks(0, 10000),
-      ]);
-
-      if (projectsResult.success) {
-        setProjects(projectsResult.data.content || []);
-        setPagination({
-          currentPage: projectsResult.data.currentPage,
-          totalPages: projectsResult.data.totalPages,
-          totalElements: projectsResult.data.totalElements,
-          size: projectsResult.data.size,
-        });
-      } else {
-        setError(projectsResult.error || 'Impossible de charger les projets');
-      }
-
-      if (tasksResult.success) {
-        setTasks(tasksResult.data.content || []);
-      }
-    } catch {
-      setError('Une erreur est survenue lors du chargement des projets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Debounce la recherche pour éviter des requêtes à chaque frappe
   useEffect(() => {
-    loadProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => loadProjects(0), 500);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(0);
+    }, 500);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
 
-  const handlePageChange = (page) => loadProjects(page);
+  // ─── Queries ────────────────────────────────────────────────────────────────
 
+  const projectsQuery = useQuery({
+    queryKey: ['projects', { page: currentPage, size: pageSize, search: debouncedSearch }],
+    queryFn: async () => {
+      const result = await projectService.getAllProjects(currentPage, pageSize, debouncedSearch);
+      if (!result.success) throw new Error(result.error || 'Impossible de charger les projets');
+      return result.data;
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  // Tâches pour le calcul de statut des projets (cache partagé avec le Dashboard)
+  const tasksQuery = useQuery({
+    queryKey: ['tasks', 'allForStatus', FETCH_LIMITS.PROJECTS_STATUS],
+    queryFn: async () => {
+      const result = await taskService.getAllTasks(0, FETCH_LIMITS.PROJECTS_STATUS);
+      return result.success ? (result.data.content || []) : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const projects = projectsQuery.data?.content || [];
+  const tasks = tasksQuery.data || [];
+  const loading = projectsQuery.isLoading || projectsQuery.isFetching;
+  const error = projectsQuery.isError ? (projectsQuery.error?.message || 'Erreur') : '';
+  const pagination = {
+    currentPage: projectsQuery.data?.currentPage ?? currentPage,
+    totalPages: projectsQuery.data?.totalPages ?? 0,
+    totalElements: projectsQuery.data?.totalElements ?? 0,
+    size: pageSize,
+  };
+
+  // ─── Mutations ──────────────────────────────────────────────────────────────
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => projectService.deleteProject(id),
+    onSuccess: (_, id) => {
+      const willBeEmpty = projects.length === 1;
+      const notFirstPage = currentPage > 0;
+      if (willBeEmpty && notFirstPage) setCurrentPage((p) => p - 1);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la suppression du projet', { variant: 'error' }),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      let result;
+      if (id) {
+        result = await projectService.updateProject(id, data);
+        if (result.success) {
+          await backlogService.patchEntity('projects', id, {
+            comments: data.comments,
+            links: data.links,
+          });
+        }
+      } else {
+        result = await projectService.createProject(data);
+      }
+      if (!result.success) throw new Error('Erreur lors de la sauvegarde');
+      return result.data;
+    },
+    onSuccess: () => {
+      setShowModal(false);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la sauvegarde du projet', { variant: 'error' }),
+  });
+
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+
+  const handlePageChange = (page) => setCurrentPage(page);
   const handlePageSizeChange = (newSize) => {
-    setPagination((prev) => ({ ...prev, size: newSize }));
-    loadProjects(0, newSize);
+    setPageSize(newSize);
+    setCurrentPage(0);
   };
 
   const handleCreateProject = () => {
@@ -105,52 +140,39 @@ export const useProjects = () => {
     setShowModal(true);
     const result = await backlogService.getEntity('projects', project.id);
     if (result.success) {
-      setFormData((prev) => ({ ...prev, comments: result.data.comments || [], links: result.data.links || [] }));
+      setFormData((prev) => ({
+        ...prev,
+        comments: result.data.comments || [],
+        links: result.data.links || [],
+      }));
     }
   };
 
   const handleDeleteProject = async (id) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce projet ?')) return;
-    const result = await projectService.deleteProject(id);
-    if (result.success) {
-      const willBeEmpty = projects.length === 1;
-      const notFirstPage = pagination.currentPage > 0;
-      const targetPage = willBeEmpty && notFirstPage ? pagination.currentPage - 1 : pagination.currentPage;
-      loadProjects(targetPage);
-    } else {
-      enqueueSnackbar('Erreur lors de la suppression du projet', { variant: 'error' });
-    }
+    const projectName = projects.find((p) => p.id === id)?.projectName;
+    const ok = await confirm({
+      title: 'Supprimer le projet ?',
+      description: `"${projectName || id}" et toutes ses données associées seront supprimés. Cette action est irréversible.`,
+      confirmLabel: 'Supprimer',
+    });
+    if (!ok) return;
+    deleteMutation.mutate(id);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    let result;
-    if (editingProject) {
-      result = await projectService.updateProject(editingProject.id, formData);
-      if (result.success) {
-        await backlogService.patchEntity('projects', editingProject.id, {
-          comments: formData.comments,
-          links: formData.links,
-        });
-      }
-    } else {
-      result = await projectService.createProject(formData);
-    }
-
-    if (result.success) {
-      setShowModal(false);
-      loadProjects(pagination.currentPage);
-    } else {
-      enqueueSnackbar('Erreur lors de la sauvegarde du projet', { variant: 'error' });
-    }
+    saveMutation.mutate({ id: editingProject?.id, data: formData });
   };
 
   const handleViewTasks = (projectId) => navigate(`/tasks?projectId=${projectId}`);
 
-  const getCalculatedStatus = (projectId) => {
-    const projectTasks = tasks.filter((t) => t.projectId === projectId);
-    return calculateProjectStatus(projectTasks);
-  };
+  const getCalculatedStatus = useCallback(
+    (projectId) => {
+      const projectTasks = tasks.filter((t) => t.projectId === projectId);
+      return calculateProjectStatus(projectTasks);
+    },
+    [tasks]
+  );
 
   return {
     projects,
@@ -158,11 +180,14 @@ export const useProjects = () => {
     loading,
     error,
     pagination,
-    searchTerm, setSearchTerm,
-    showModal, setShowModal,
+    searchTerm,
+    setSearchTerm,
+    showModal,
+    setShowModal,
     editingProject,
-    formData, setFormData,
-    loadProjects,
+    formData,
+    setFormData,
+    loadProjects: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
     handlePageChange,
     handlePageSizeChange,
     handleCreateProject,

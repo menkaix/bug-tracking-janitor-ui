@@ -1,80 +1,96 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSnackbar } from 'notistack';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useConfirm } from './useConfirm';
 import personService from '../services/person.service';
-import logger from '../services/logger.service';
 
 const EMPTY_PERSON_FORM = { firstName: '', lastName: '', email: '' };
 
 /**
- * Controller hook pour la page Personnes.
+ * Controller hook pour la page Personnes — React Query + useMutation.
  */
 export const usePersons = () => {
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
+  const queryClient = useQueryClient();
 
-  const [persons, setPersons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const [pagination, setPagination] = useState({
-    currentPage: 0,
-    totalPages: 0,
-    totalElements: 0,
-    size: 10,
-  });
-
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
-  const [copiedEmail, setCopiedEmail] = useState(null);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
+  const [copiedEmail, setCopiedEmail] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingPerson, setEditingPerson] = useState(null);
   const [formData, setFormData] = useState({ ...EMPTY_PERSON_FORM });
 
-  const fetchPersons = useCallback(
-    async (page = 0, size = pagination.size) => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await personService.getAllPersons(page, size, searchTerm);
-        if (result.success) {
-          setPersons(result.data.content || []);
-          setPagination({
-            currentPage: result.data.number || result.data.currentPage || 0,
-            totalPages: result.data.totalPages || 0,
-            totalElements: result.data.totalElements || 0,
-            size: result.data.size || size,
-          });
-        } else {
-          setError(result.error);
-        }
-      } catch (err) {
-        logger.error('Error in fetchPersons:', err);
-        setError('Erreur lors du chargement des personnes');
-      } finally {
-        setLoading(false);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searchTerm, pagination.size]
-  );
-
+  // Debounce la recherche
   useEffect(() => {
-    fetchPersons(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    setPagination((prev) => ({ ...prev, currentPage: 0 }));
+  // ─── Query ──────────────────────────────────────────────────────────────────
+
+  const personsQuery = useQuery({
+    queryKey: ['persons', { page: currentPage, size: pageSize, search: debouncedSearch }],
+    queryFn: async () => {
+      const result = await personService.getAllPersons(currentPage, pageSize, debouncedSearch);
+      if (!result.success) throw new Error(result.error || 'Erreur lors du chargement des personnes');
+      return result.data;
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const persons = personsQuery.data?.content || [];
+  const loading = personsQuery.isLoading;
+  const error = personsQuery.isError ? (personsQuery.error?.message || 'Erreur') : null;
+  const pagination = {
+    currentPage: personsQuery.data?.number ?? personsQuery.data?.currentPage ?? currentPage,
+    totalPages: personsQuery.data?.totalPages ?? 0,
+    totalElements: personsQuery.data?.totalElements ?? 0,
+    size: pageSize,
   };
 
-  const handlePageChange = (newPage) => {
-    setPagination((prev) => ({ ...prev, currentPage: newPage }));
-    fetchPersons(newPage, pagination.size);
-  };
+  // ─── Handlers modal (définis avant les mutations qui en ont besoin) ──────────
 
+  const handleCloseModal = useCallback(() => {
+    setShowModal(false);
+    setEditingPerson(null);
+    setFormData({ ...EMPTY_PERSON_FORM });
+  }, []);
+
+  // ─── Mutations ──────────────────────────────────────────────────────────────
+
+  const saveMutation = useMutation({
+    mutationFn: ({ id, data }) =>
+      id ? personService.updatePerson(id, data) : personService.createPerson(data),
+    onSuccess: () => {
+      handleCloseModal();
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+    onError: () => enqueueSnackbar("Erreur lors de l'opération", { variant: 'error' }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => personService.deletePerson(id),
+    onSuccess: () => {
+      if (persons.length === 1 && currentPage > 0) setCurrentPage((p) => p - 1);
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la suppression', { variant: 'error' }),
+  });
+
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+
+  const handleSearchChange = (e) => setSearchTerm(e.target.value);
+  const handlePageChange = (newPage) => setCurrentPage(newPage);
   const handleSizeChange = (newSize) => {
-    setPagination((prev) => ({ ...prev, size: newSize, currentPage: 0 }));
-    fetchPersons(0, newSize);
+    setPageSize(newSize);
+    setCurrentPage(0);
   };
 
   const handleCreateClick = () => {
@@ -93,71 +109,36 @@ export const usePersons = () => {
     setShowModal(true);
   };
 
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingPerson(null);
-    setFormData({ ...EMPTY_PERSON_FORM });
-  };
-
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.email?.trim()) {
       enqueueSnackbar("L'email est obligatoire", { variant: 'warning' });
       return;
     }
-    try {
-      setLoading(true);
-      const result = editingPerson
-        ? await personService.updatePerson(editingPerson.id, formData)
-        : await personService.createPerson(formData);
-
-      if (result.success) {
-        handleCloseModal();
-        fetchPersons(pagination.currentPage, pagination.size);
-      } else {
-        enqueueSnackbar(result.error || "Erreur lors de l'opération", { variant: 'error' });
-      }
-    } catch (err) {
-      logger.error('Error in handleSubmit:', err);
-      enqueueSnackbar("Erreur lors de l'opération", { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
+    saveMutation.mutate({ id: editingPerson?.id, data: formData });
   };
 
   const handleDelete = async (id, fullName) => {
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer ${fullName} ?`)) return;
-    try {
-      setLoading(true);
-      const result = await personService.deletePerson(id);
-      if (result.success) {
-        if (persons.length === 1 && pagination.currentPage > 0) {
-          handlePageChange(pagination.currentPage - 1);
-        } else {
-          fetchPersons(pagination.currentPage, pagination.size);
-        }
-      } else {
-        enqueueSnackbar(result.error || 'Erreur lors de la suppression', { variant: 'error' });
-      }
-    } catch (err) {
-      logger.error('Error in handleDelete:', err);
-      enqueueSnackbar('Erreur lors de la suppression', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
+    const ok = await confirm({
+      title: `Supprimer ${fullName} ?`,
+      description: 'Cette personne sera définitivement supprimée.',
+      confirmLabel: 'Supprimer',
+    });
+    if (!ok) return;
+    deleteMutation.mutate(id);
   };
 
-  const handleCopyEmail = (email) => {
+  const handleCopyEmail = useCallback((email) => {
     navigator.clipboard.writeText(email).then(() => {
       setCopiedEmail(email);
       setTimeout(() => setCopiedEmail(null), 2000);
     });
-  };
+  }, []);
 
   return {
     persons,
@@ -169,7 +150,7 @@ export const usePersons = () => {
     showModal,
     editingPerson,
     formData,
-    fetchPersons,
+    fetchPersons: () => queryClient.invalidateQueries({ queryKey: ['persons'] }),
     handleSearchChange,
     handlePageChange,
     handleSizeChange,

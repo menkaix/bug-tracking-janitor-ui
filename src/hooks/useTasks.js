@@ -9,6 +9,7 @@ import backlogService from '../services/backlog.service';
 import { EMPTY_TASK_FORM } from '../models/task.model';
 import { assigneeToArray, arrayToAssignee } from '../utils/assigneeUtils';
 import { toDateInputValue, fromDateInputValue } from '../utils/dateUtils';
+import { useConfirm } from './useConfirm';
 
 // ─── localStorage preferences ────────────────────────────────────────────────
 
@@ -129,12 +130,13 @@ export const fetchTasksData = async ({ page, size, statusFilter, projectFilter, 
 
 /**
  * Controller hook pour la page Tâches.
- * Encapsule toute la logique : état, filtres, pagination, mutations CRUD et bulk.
+ * Toutes les mutations utilisent useMutation pour un état isPending cohérent.
  */
 export const useTasks = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   const saved = loadPreferences();
 
@@ -153,7 +155,7 @@ export const useTasks = () => {
   });
 
   // ── Vue & pagination ──
-  const [viewMode, setViewMode] = useState(saved?.viewMode ?? 0); // 0 = Liste, 1 = Kanban
+  const [viewMode, setViewMode] = useState(saved?.viewMode ?? 0);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(saved?.pageSize || 10);
 
@@ -164,7 +166,6 @@ export const useTasks = () => {
 
   // ── Sélection ──
   const [selectedTasks, setSelectedTasks] = useState([]);
-  const [, setBulkLoading] = useState(false);
 
   // ── Debounce recherche ──
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
@@ -176,13 +177,11 @@ export const useTasks = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Réinitialiser la page sur changement de filtre
   useEffect(() => {
     setCurrentPage(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, projectFilter, assigneeFilter, viewMode]);
 
-  // Persister préférences
   useEffect(() => {
     savePreferences({ viewMode, searchTerm, projectFilter, statusFilter, assigneeFilter });
   }, [viewMode, searchTerm, projectFilter, statusFilter, assigneeFilter]);
@@ -225,7 +224,9 @@ export const useTasks = () => {
   const tasks = tasksQueryData?.tasks || [];
   const pagination = tasksQueryData?.pagination || { currentPage: 0, totalPages: 0, totalElements: 0, size: pageSize };
 
-  // ── Mutation statut (optimiste) ──
+  // ── Mutations ────────────────────────────────────────────────────────────────
+
+  // Changement de statut — mise à jour optimiste
   const statusMutation = useMutation({
     mutationFn: ({ taskId, task, newStatus }) => taskService.updateTask(taskId, { ...task, status: newStatus }),
     onMutate: async ({ taskId, newStatus, currentQueryKey }) => {
@@ -244,7 +245,105 @@ export const useTasks = () => {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
-  // ── Helper mise à jour optimiste ──
+  // Édition inline (projet, assignés) — mise à jour optimiste partagée
+  const inlineEditMutation = useMutation({
+    mutationFn: ({ taskId, fullTask }) => taskService.updateTask(taskId, fullTask),
+    onMutate: async ({ taskId, partialUpdate, currentQueryKey }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previous = queryClient.getQueryData(currentQueryKey);
+      queryClient.setQueryData(currentQueryKey, (old) =>
+        old ? { ...old, tasks: old.tasks.map((t) => (t.id === taskId ? { ...t, ...partialUpdate } : t)) } : old
+      );
+      return { previous, currentQueryKey };
+    },
+    onError: (_, vars, context) => {
+      if (context?.previous) queryClient.setQueryData(context.currentQueryKey, context.previous);
+      enqueueSnackbar(vars.errorMessage || 'Erreur lors de la mise à jour', { variant: 'error' });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
+  // Suppression d'une tâche
+  const deleteMutation = useMutation({
+    mutationFn: (id) => taskService.deleteTask(id),
+    onSuccess: () => {
+      if (tasks.length === 1 && currentPage > 0) setCurrentPage((p) => p - 1);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la suppression de la tâche', { variant: 'error' }),
+  });
+
+  // Création / mise à jour d'une tâche (formulaire)
+  const saveMutation = useMutation({
+    mutationFn: async ({ id, taskData, comments, links }) => {
+      let result;
+      if (id) {
+        result = await taskService.updateTask(id, taskData);
+        if (result.success) {
+          await backlogService.patchEntity('tasks', id, { comments, links });
+        }
+      } else {
+        result = await taskService.createTask(taskData);
+      }
+      if (!result.success) throw new Error('Erreur lors de la sauvegarde');
+      return result.data;
+    },
+    onSuccess: () => {
+      setShowModal(false);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la sauvegarde de la tâche', { variant: 'error' }),
+  });
+
+  // Suppression en masse
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids) => Promise.all(ids.map((id) => taskService.deleteTask(id))),
+    onSuccess: () => {
+      setSelectedTasks([]);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la suppression en masse', { variant: 'error' }),
+  });
+
+  // Changement de statut en masse
+  const bulkStatusMutation = useMutation({
+    mutationFn: ({ ids, newStatus, currentTasks }) =>
+      Promise.all(
+        ids.map((id) => {
+          const task = currentTasks.find((t) => t.id === id);
+          if (task) return taskService.updateTask(id, { ...task, status: newStatus });
+        })
+      ),
+    onSuccess: () => {
+      setSelectedTasks([]);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la mise à jour en masse', { variant: 'error' }),
+  });
+
+  // Assignation en masse
+  const bulkAssignMutation = useMutation({
+    mutationFn: ({ ids, email, currentTasks }) =>
+      Promise.all(
+        ids.map((id) => {
+          const task = currentTasks.find((t) => t.id === id);
+          if (task) {
+            const current = assigneeToArray(task.assignee);
+            if (!current.includes(email)) {
+              return taskService.updateTask(id, { ...task, assignee: arrayToAssignee([...current, email]) });
+            }
+          }
+        })
+      ),
+    onSuccess: () => {
+      setSelectedTasks([]);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: () => enqueueSnackbar("Erreur lors de l'assignation en masse", { variant: 'error' }),
+  });
+
+  // ── Helper ───────────────────────────────────────────────────────────────────
+
   const optimisticTaskUpdate = (taskId, updater) => {
     const qk = ['tasks', taskQueryParams];
     queryClient.setQueryData(qk, (old) =>
@@ -253,7 +352,8 @@ export const useTasks = () => {
     return qk;
   };
 
-  // ── URL sync ──
+  // ── URL sync ─────────────────────────────────────────────────────────────────
+
   const updateURLWithFilters = (statuses, project, assignees) => {
     const params = {};
     if (statuses.length > 0) params.status = statuses.join(',');
@@ -262,7 +362,8 @@ export const useTasks = () => {
     setSearchParams(params);
   };
 
-  // ── Handlers filtres ──
+  // ── Handlers filtres ─────────────────────────────────────────────────────────
+
   const toggleStatusFilter = (statusValue) => {
     setStatusFilter((prev) => {
       const next = prev.includes(statusValue) ? prev.filter((s) => s !== statusValue) : [...prev, statusValue];
@@ -294,7 +395,8 @@ export const useTasks = () => {
     updateURLWithFilters(statusFilter, newProjectId, assigneeFilter);
   };
 
-  // ── Pagination ──
+  // ── Pagination ───────────────────────────────────────────────────────────────
+
   const handlePageChange = (page) => {
     if (page < 0) return;
     if (pagination.totalPages > 0 && page >= pagination.totalPages) return;
@@ -306,7 +408,8 @@ export const useTasks = () => {
     setCurrentPage(0);
   };
 
-  // ── Sélection ──
+  // ── Sélection ────────────────────────────────────────────────────────────────
+
   const isSelected = (id) => selectedTasks.includes(id);
 
   const handleSelectAll = (event) => {
@@ -322,51 +425,49 @@ export const useTasks = () => {
     }
   };
 
-  // ── CRUD tâches ──
+  // ── Handlers CRUD ────────────────────────────────────────────────────────────
+
   const handleStatusChange = (taskId, newStatus) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
     statusMutation.mutate({ taskId, task, newStatus, currentQueryKey: ['tasks', taskQueryParams] });
   };
 
-  const handleProjectChange = async (taskId, newProjectId) => {
+  const handleProjectChange = (taskId, newProjectId) => {
     const task = tasks.find((t) => t.id === taskId);
-    const qk = optimisticTaskUpdate(taskId, (t) => ({ ...t, projectId: newProjectId }));
-    const result = await taskService.updateTask(taskId, { ...task, projectId: newProjectId });
-    if (!result.success) {
-      queryClient.setQueryData(qk, (old) =>
-        old ? { ...old, tasks: old.tasks.map((t) => (t.id === taskId ? { ...t, projectId: task.projectId } : t)) } : old
-      );
-      enqueueSnackbar('Erreur lors de la mise à jour du projet', { variant: 'error' });
-    }
+    inlineEditMutation.mutate({
+      taskId,
+      fullTask: { ...task, projectId: newProjectId },
+      partialUpdate: { projectId: newProjectId },
+      errorMessage: 'Erreur lors de la mise à jour du projet',
+      currentQueryKey: ['tasks', taskQueryParams],
+    });
   };
 
-  const handleAddAssignee = async (taskId, email) => {
+  const handleAddAssignee = (taskId, email) => {
     const task = tasks.find((t) => t.id === taskId);
     const current = assigneeToArray(task.assignee);
     if (current.includes(email)) return;
     const newStr = arrayToAssignee([...current, email]);
-    const qk = optimisticTaskUpdate(taskId, (t) => ({ ...t, assignee: newStr }));
-    const result = await taskService.updateTask(taskId, { ...task, assignee: newStr });
-    if (!result.success) {
-      queryClient.setQueryData(qk, (old) =>
-        old ? { ...old, tasks: old.tasks.map((t) => (t.id === taskId ? { ...t, assignee: task.assignee } : t)) } : old
-      );
-      enqueueSnackbar("Erreur lors de l'assignation", { variant: 'error' });
-    }
+    inlineEditMutation.mutate({
+      taskId,
+      fullTask: { ...task, assignee: newStr },
+      partialUpdate: { assignee: newStr },
+      errorMessage: "Erreur lors de l'assignation",
+      currentQueryKey: ['tasks', taskQueryParams],
+    });
   };
 
-  const handleRemoveAssignee = async (taskId, email) => {
+  const handleRemoveAssignee = (taskId, email) => {
     const task = tasks.find((t) => t.id === taskId);
     const newStr = arrayToAssignee(assigneeToArray(task.assignee).filter((e) => e !== email));
-    const qk = optimisticTaskUpdate(taskId, (t) => ({ ...t, assignee: newStr }));
-    const result = await taskService.updateTask(taskId, { ...task, assignee: newStr });
-    if (!result.success) {
-      queryClient.setQueryData(qk, (old) =>
-        old ? { ...old, tasks: old.tasks.map((t) => (t.id === taskId ? { ...t, assignee: task.assignee } : t)) } : old
-      );
-      enqueueSnackbar('Erreur lors de la désassignation', { variant: 'error' });
-    }
+    inlineEditMutation.mutate({
+      taskId,
+      fullTask: { ...task, assignee: newStr },
+      partialUpdate: { assignee: newStr },
+      errorMessage: 'Erreur lors de la désassignation',
+      currentQueryKey: ['tasks', taskQueryParams],
+    });
   };
 
   const handleCreateTask = () => {
@@ -397,17 +498,16 @@ export const useTasks = () => {
   };
 
   const handleDeleteTask = async (id) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
-    const result = await taskService.deleteTask(id);
-    if (result.success) {
-      if (tasks.length === 1 && currentPage > 0) setCurrentPage((p) => p - 1);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    } else {
-      enqueueSnackbar('Erreur lors de la suppression de la tâche', { variant: 'error' });
-    }
+    const ok = await confirm({
+      title: 'Supprimer la tâche ?',
+      description: 'Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+    });
+    if (!ok) return;
+    deleteMutation.mutate(id);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     const { assignees, ...rest } = formData;
     const taskData = {
@@ -416,26 +516,12 @@ export const useTasks = () => {
       plannedStart: fromDateInputValue(formData.plannedStart),
       deadLine: fromDateInputValue(formData.deadLine),
     };
-
-    let result;
-    if (editingTask) {
-      result = await taskService.updateTask(editingTask.id, taskData);
-      if (result.success) {
-        await backlogService.patchEntity('tasks', editingTask.id, {
-          comments: formData.comments,
-          links: formData.links,
-        });
-      }
-    } else {
-      result = await taskService.createTask(taskData);
-    }
-
-    if (result.success) {
-      setShowModal(false);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    } else {
-      enqueueSnackbar('Erreur lors de la sauvegarde de la tâche', { variant: 'error' });
-    }
+    saveMutation.mutate({
+      id: editingTask?.id,
+      taskData,
+      comments: formData.comments,
+      links: formData.links,
+    });
   };
 
   const handleAssigneeToggle = (email) => {
@@ -446,62 +532,26 @@ export const useTasks = () => {
     });
   };
 
-  // ── Bulk ──
+  // ── Handlers bulk ────────────────────────────────────────────────────────────
+
   const handleBulkDelete = async () => {
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer ${selectedTasks.length} tâches ?`)) return;
-    setBulkLoading(true);
-    try {
-      await Promise.all(selectedTasks.map((id) => taskService.deleteTask(id)));
-      setSelectedTasks([]);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    } catch {
-      enqueueSnackbar('Erreur lors de la suppression en masse', { variant: 'error' });
-    } finally {
-      setBulkLoading(false);
-    }
+    const ok = await confirm({
+      title: `Supprimer ${selectedTasks.length} tâche(s) ?`,
+      description: 'Cette action est irréversible. Toutes les tâches sélectionnées seront supprimées.',
+      confirmLabel: 'Tout supprimer',
+    });
+    if (!ok) return;
+    bulkDeleteMutation.mutate(selectedTasks);
   };
 
-  const handleBulkStatusChange = async (newStatus) => {
+  const handleBulkStatusChange = (newStatus) => {
     if (!newStatus) return;
-    setBulkLoading(true);
-    try {
-      await Promise.all(
-        selectedTasks.map(async (id) => {
-          const task = tasks.find((t) => t.id === id);
-          if (task) return taskService.updateTask(id, { ...task, status: newStatus });
-        })
-      );
-      setSelectedTasks([]);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    } catch {
-      enqueueSnackbar('Erreur lors de la mise à jour en masse', { variant: 'error' });
-    } finally {
-      setBulkLoading(false);
-    }
+    bulkStatusMutation.mutate({ ids: selectedTasks, newStatus, currentTasks: tasks });
   };
 
-  const handleBulkAssign = async (email) => {
+  const handleBulkAssign = (email) => {
     if (!email) return;
-    setBulkLoading(true);
-    try {
-      await Promise.all(
-        selectedTasks.map(async (id) => {
-          const task = tasks.find((t) => t.id === id);
-          if (task) {
-            const current = assigneeToArray(task.assignee);
-            if (!current.includes(email)) {
-              return taskService.updateTask(id, { ...task, assignee: arrayToAssignee([...current, email]) });
-            }
-          }
-        })
-      );
-      setSelectedTasks([]);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    } catch {
-      enqueueSnackbar("Erreur lors de l'assignation en masse", { variant: 'error' });
-    } finally {
-      setBulkLoading(false);
-    }
+    bulkAssignMutation.mutate({ ids: selectedTasks, email, currentTasks: tasks });
   };
 
   return {
@@ -517,6 +567,11 @@ export const useTasks = () => {
     isFetching,
     isError,
     tasksError,
+
+    // Mutation state (pour spinners)
+    isSaving: saveMutation.isPending,
+    isDeleting: deleteMutation.isPending,
+    isBulkPending: bulkDeleteMutation.isPending || bulkStatusMutation.isPending || bulkAssignMutation.isPending,
 
     // Filters state
     searchTerm, setSearchTerm,

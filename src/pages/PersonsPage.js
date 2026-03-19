@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useSnackbar } from 'notistack';
+import React from 'react';
 import {
   Container,
   Typography,
@@ -36,224 +35,37 @@ import {
   People as PeopleIcon,
   ContentCopy as CopyIcon,
 } from '@mui/icons-material';
-import personService from '../services/person.service';
-import logger from '../services/logger.service';
 import { formatDateLong } from '../utils/dateUtils';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
+import { usePersons } from '../hooks/usePersons';
+
+const formatDate = (d) => formatDateLong(d) ?? 'N/A';
 
 function PersonsPage() {
   const theme = useTheme();
-  const { enqueueSnackbar } = useSnackbar();
-  // États pour la liste des personnes
-  const [persons, setPersons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // États pour la pagination
-  const [pagination, setPagination] = useState({
-    currentPage: 0,
-    totalPages: 0,
-    totalElements: 0,
-    size: 10
-  });
-
-  // États pour la recherche
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchTimeout, setSearchTimeout] = useState(null);
-
-  // État pour le feedback de copie email
-  const [copiedEmail, setCopiedEmail] = useState(null);
-
-  // États pour la modale
-  const [showModal, setShowModal] = useState(false);
-  const [editingPerson, setEditingPerson] = useState(null);
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: ''
-  });
-
-  // Charger les personnes
-  const fetchPersons = useCallback(async (page = 0, size = pagination.size) => {
-    try {
-      setLoading(true);
-      setError(null);
-      logger.debug(`Fetching persons - page: ${page}, size: ${size}, search: ${searchTerm}`);
-
-      const result = await personService.getAllPersons(page, size, searchTerm);
-
-      if (result.success) {
-        setPersons(result.data.content || []);
-        setPagination({
-          currentPage: result.data.number || result.data.currentPage || 0,
-          totalPages: result.data.totalPages || 0,
-          totalElements: result.data.totalElements || 0,
-          size: result.data.size || size
-        });
-      } else {
-        setError(result.error);
-      }
-    } catch (err) {
-      logger.error('Error in fetchPersons:', err);
-      setError('Erreur lors du chargement des personnes');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm, pagination.size]);
-
-  // Effet pour charger les personnes au montage et lors des changements
-  useEffect(() => {
-    fetchPersons(pagination.currentPage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm]);
-
-  // Gérer la recherche avec debouncing
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-
-    // Annuler le timeout précédent
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
-    // Définir un nouveau timeout
-    const timeout = setTimeout(() => {
-      setSearchTerm(value);
-      setPagination(prev => ({ ...prev, currentPage: 0 }));
-    }, 500);
-
-    setSearchTimeout(timeout);
-  };
-
-  // Gérer le changement de page
-  const handlePageChange = (newPage) => {
-    setPagination(prev => ({ ...prev, currentPage: newPage }));
-    fetchPersons(newPage, pagination.size);
-  };
-
-  // Gérer le changement de taille de page
-  const handleSizeChange = (newSize) => {
-    setPagination(prev => ({ ...prev, size: newSize, currentPage: 0 }));
-    fetchPersons(0, newSize);
-  };
-
-  // Ouvrir la modale pour créer une personne
-  const handleCreateClick = () => {
-    setEditingPerson(null);
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: ''
-    });
-    setShowModal(true);
-  };
-
-  // Ouvrir la modale pour éditer une personne
-  const handleEditClick = (person) => {
-    setEditingPerson(person);
-    setFormData({
-      firstName: person.firstName || '',
-      lastName: person.lastName || '',
-      email: person.email || ''
-    });
-    setShowModal(true);
-  };
-
-  // Fermer la modale
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingPerson(null);
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: ''
-    });
-  };
-
-  // Gérer les changements dans le formulaire
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  // Soumettre le formulaire
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // Validation de l'email
-    if (!formData.email || !formData.email.trim()) {
-      enqueueSnackbar('L\'email est obligatoire', { variant: 'warning' });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      let result;
-
-      if (editingPerson) {
-        // Mise à jour
-        result = await personService.updatePerson(editingPerson.id, formData);
-      } else {
-        // Création
-        result = await personService.createPerson(formData);
-      }
-
-      if (result.success) {
-        handleCloseModal();
-        fetchPersons(pagination.currentPage, pagination.size);
-      } else {
-        enqueueSnackbar(result.error || 'Erreur lors de l\'opération', { variant: 'error' });
-      }
-    } catch (err) {
-      logger.error('Error in handleSubmit:', err);
-      enqueueSnackbar('Erreur lors de l\'opération', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Supprimer une personne
-  const handleDelete = async (id, fullName) => {
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer ${fullName} ?`)) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const result = await personService.deletePerson(id);
-
-      if (result.success) {
-        // Si on supprime le dernier élément d'une page, revenir à la page précédente
-        if (persons.length === 1 && pagination.currentPage > 0) {
-          handlePageChange(pagination.currentPage - 1);
-        } else {
-          fetchPersons(pagination.currentPage, pagination.size);
-        }
-      } else {
-        enqueueSnackbar(result.error || 'Erreur lors de la suppression', { variant: 'error' });
-      }
-    } catch (err) {
-      logger.error('Error in handleDelete:', err);
-      enqueueSnackbar('Erreur lors de la suppression', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Copier l'email dans le presse-papier
-  const handleCopyEmail = (email) => {
-    navigator.clipboard.writeText(email).then(() => {
-      setCopiedEmail(email);
-      setTimeout(() => setCopiedEmail(null), 2000);
-    });
-  };
-
-  const formatDate = (d) => formatDateLong(d) ?? 'N/A';
+  const {
+    persons,
+    loading,
+    error,
+    pagination,
+    copiedEmail,
+    showModal,
+    editingPerson,
+    formData,
+    fetchPersons,
+    handleSearchChange,
+    handlePageChange,
+    handleSizeChange,
+    handleCreateClick,
+    handleEditClick,
+    handleCloseModal,
+    handleFormChange,
+    handleSubmit,
+    handleDelete,
+    handleCopyEmail,
+  } = usePersons();
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -272,12 +84,7 @@ function PersonsPage() {
           startIcon={<AddIcon />}
           onClick={handleCreateClick}
           size="medium"
-          sx={{
-            borderRadius: 2,
-            px: 2,
-            py: 1,
-            fontWeight: 500,
-          }}
+          sx={{ borderRadius: 2, px: 2, py: 1, fontWeight: 500 }}
         >
           Nouvelle Personne
         </Button>
@@ -292,37 +99,21 @@ function PersonsPage() {
           InputProps={{
             startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
           }}
-          sx={{
-            maxWidth: 600,
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 3,
-            },
-          }}
+          sx={{ maxWidth: 600, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
         />
       </Box>
 
-      {/* Affichage du loading */}
       {loading && <Loading />}
 
-      {/* Affichage des erreurs */}
       {error && !loading && (
-        <ErrorMessage
-          message={error}
-          onRetry={() => fetchPersons(pagination.currentPage, pagination.size)}
-        />
+        <ErrorMessage message={error} onRetry={fetchPersons} />
       )}
 
-      {/* Tableau des personnes */}
       {!loading && !error && (
         <>
           <TableContainer
             component={Paper}
-            sx={{
-              borderRadius: 3,
-              boxShadow: 2,
-              mb: 4,
-              overflow: 'hidden',
-            }}
+            sx={{ borderRadius: 3, boxShadow: 2, mb: 4, overflow: 'hidden' }}
           >
             <Table>
               <TableHead>
@@ -351,9 +142,7 @@ function PersonsPage() {
                     <TableRow
                       key={person.id}
                       sx={{
-                        '&:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                        },
+                        '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.04) },
                         transition: 'background-color 0.2s',
                       }}
                     >
@@ -364,7 +153,7 @@ function PersonsPage() {
                       </TableCell>
                       <TableCell>
                         <Tooltip
-                          title={copiedEmail === person.email ? 'Copié !' : 'Copier l\'email'}
+                          title={copiedEmail === person.email ? 'Copié !' : "Copier l'email"}
                           placement="top"
                         >
                           <Chip
@@ -378,9 +167,7 @@ function PersonsPage() {
                             sx={{
                               borderRadius: 2,
                               cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                              },
+                              '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
                             }}
                           />
                         </Tooltip>
@@ -404,28 +191,22 @@ function PersonsPage() {
                               onClick={() => handleEditClick(person)}
                               color="primary"
                               size="small"
-                              sx={{
-                                '&:hover': {
-                                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                                },
-                              }}
+                              sx={{ '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) } }}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Supprimer">
                             <IconButton
-                              onClick={() => handleDelete(
-                                person.id,
-                                `${person.firstName || ''} ${person.lastName || ''}`.trim() || person.email
-                              )}
+                              onClick={() =>
+                                handleDelete(
+                                  person.id,
+                                  `${person.firstName || ''} ${person.lastName || ''}`.trim() || person.email
+                                )
+                              }
                               color="error"
                               size="small"
-                              sx={{
-                                '&:hover': {
-                                  backgroundColor: alpha(theme.palette.error.main, 0.1),
-                                },
-                              }}
+                              sx={{ '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.1) } }}
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
@@ -439,7 +220,6 @@ function PersonsPage() {
             </Table>
           </TableContainer>
 
-          {/* Pagination */}
           {pagination.totalPages > 1 && (
             <Pagination
               currentPage={pagination.currentPage}
@@ -459,11 +239,7 @@ function PersonsPage() {
         onClose={handleCloseModal}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-          },
-        }}
+        PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle sx={{ pb: 1 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -486,11 +262,8 @@ function PersonsPage() {
                 value={formData.firstName}
                 onChange={handleFormChange}
                 placeholder="Jean"
-                InputProps={{
-                  startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
+                InputProps={{ startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
               />
-
               <TextField
                 fullWidth
                 label="Nom"
@@ -498,11 +271,8 @@ function PersonsPage() {
                 value={formData.lastName}
                 onChange={handleFormChange}
                 placeholder="Dupont"
-                InputProps={{
-                  startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
+                InputProps={{ startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
               />
-
               <TextField
                 fullWidth
                 type="email"
@@ -512,9 +282,7 @@ function PersonsPage() {
                 onChange={handleFormChange}
                 placeholder="jean.dupont@example.com"
                 required
-                InputProps={{
-                  startAdornment: <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
+                InputProps={{ startAdornment: <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
               />
             </Stack>
           </DialogContent>
@@ -523,7 +291,12 @@ function PersonsPage() {
             <Button onClick={handleCloseModal} variant="outlined" size="large">
               Annuler
             </Button>
-            <Button type="submit" variant="contained" size="large" startIcon={editingPerson ? <EditIcon /> : <AddIcon />}>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              startIcon={editingPerson ? <EditIcon /> : <AddIcon />}
+            >
               {editingPerson ? 'Mettre à jour' : 'Créer'}
             </Button>
           </DialogActions>

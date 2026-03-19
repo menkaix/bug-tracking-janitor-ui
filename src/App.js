@@ -6,6 +6,7 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
 import { queryClient } from './queryClient';
+import { ConfirmProvider } from './hooks/useConfirm';
 import { apiService } from './services/api.service';
 import logger from './services/logger.service';
 import ApiKeyLogin from './components/ApiKeyLogin';
@@ -130,6 +131,7 @@ function App() {
       >
         <ThemeProvider theme={theme}>
           <CssBaseline />
+          <ConfirmProvider>
           <Router>
             <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
               <Navbar onLogout={handleLogout} />
@@ -153,6 +155,7 @@ function App() {
               </Box>
             </Box>
           </Router>
+          </ConfirmProvider>
         </ThemeProvider>
       </SnackbarProvider>
     </QueryClientProvider>
