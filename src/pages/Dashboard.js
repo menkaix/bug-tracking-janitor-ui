@@ -62,6 +62,7 @@ import backlogService from '../services/backlog.service';
 import DashboardSkeleton from '../components/Common/DashboardSkeleton';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import OccupationCalendar from '../components/Dashboard/OccupationCalendar';
+import OccupationMap from '../components/Dashboard/OccupationMap';
 import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
 
 /**
@@ -106,6 +107,7 @@ const Dashboard = () => {
   const allPersons = useMemo(() => dashboardRaw?.persons || [], [dashboardRaw]);
 
   const [activeTab, setActiveTab] = useState(0);
+  const [occupationSubTab, setOccupationSubTab] = useState(0);
   const [projectMetaMap, setProjectMetaMap] = useState({});
 
   // State for Edit Modal
@@ -1258,13 +1260,28 @@ const Dashboard = () => {
         </Box>
       )}
 
-      {/* Contenu onglet Calendrier */}
+      {/* Contenu onglet Occupation */}
       {activeTab === 2 && (
         <Box>
-          <Typography variant="h5" fontWeight={600} sx={{ mb: 3 }}>
-            Calendrier d'Occupation
+          <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>
+            Occupation
           </Typography>
-          <OccupationCalendar tasks={allTasks} persons={allPersons} onTaskClick={handleTaskClick} />
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs
+              value={occupationSubTab}
+              onChange={(e, v) => setOccupationSubTab(v)}
+              sx={{ '& .MuiTab-root': { minHeight: 40, fontSize: '0.875rem' } }}
+            >
+              <Tab icon={<CalendarIcon />} iconPosition="start" label="Calendrier" />
+              <Tab icon={<PeopleIcon />} iconPosition="start" label="Carte des occupations" />
+            </Tabs>
+          </Box>
+          {occupationSubTab === 0 && (
+            <OccupationCalendar tasks={allTasks} persons={allPersons} onTaskClick={handleTaskClick} />
+          )}
+          {occupationSubTab === 1 && (
+            <OccupationMap tasks={allTasks} persons={allPersons} projects={allProjects} onTaskClick={handleTaskClick} />
+          )}
         </Box>
       )}
 
