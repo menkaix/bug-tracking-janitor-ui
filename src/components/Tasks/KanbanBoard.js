@@ -412,12 +412,12 @@ const KanbanBoard = ({ tasks, persons, onEditTask, onDeleteTask, onStatusChange 
         .flatMap(c => c.statusValues);
 
       return tasksWithOverrides.filter(task => {
-        const taskStatus = task.status || '';
+        const taskStatus = (task.status || '').toLowerCase();
         return !taskStatus || !standardStatuses.includes(taskStatus);
       });
     }
 
-    return tasksWithOverrides.filter(task => column.statusValues.includes(task.status));
+    return tasksWithOverrides.filter(task => column.statusValues.includes((task.status || '').toLowerCase()));
   };
 
   const handleDragStart = (event) => {

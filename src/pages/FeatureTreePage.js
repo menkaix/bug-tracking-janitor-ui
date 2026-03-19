@@ -363,7 +363,7 @@ const BulkAssignMenu = ({ tasks, persons, onRefresh }) => {
 
 // ─── Sous-composants (tâches, features, stories, acteurs) ─────────────────────
 
-const TaskList = ({ tasks, onRefresh }) => {
+const TaskList = ({ tasks, onRefresh, onEditTask }) => {
   if (!tasks || tasks.length === 0) return null;
   return (
     <List dense disablePadding sx={{ pl: 2, mt: 1 }}>
@@ -385,13 +385,16 @@ const TaskList = ({ tasks, onRefresh }) => {
             primaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
           />
           <TaskStatusSelect task={task} onRefresh={onRefresh} />
+          <IconButton size="small" onClick={() => onEditTask(task)} color="primary">
+            <EditIcon fontSize="small" />
+          </IconButton>
         </ListItem>
       ))}
     </List>
   );
 };
 
-const FeatureItem = ({ feature, onEdit, onCreateTask, onRefresh, persons }) => {
+const FeatureItem = ({ feature, onEdit, onCreateTask, onRefresh, persons, onEditTask }) => {
   const theme = useTheme();
   const config = getFeatureConfig(feature.type);
   const [open, setOpen] = useState(false);
@@ -452,14 +455,14 @@ const FeatureItem = ({ feature, onEdit, onCreateTask, onRefresh, persons }) => {
       </Stack>
       {hasTasks && (
         <Collapse in={open}>
-          <TaskList tasks={feature.tasks} onRefresh={onRefresh} />
+          <TaskList tasks={feature.tasks} onRefresh={onRefresh} onEditTask={onEditTask} />
         </Collapse>
       )}
     </Box>
   );
 };
 
-const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons }) => {
+const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons, onEditTask }) => {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const hasFeatures = story.features && story.features.length > 0;
@@ -547,7 +550,7 @@ const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTa
           {hasFeatures ? (
             <Stack spacing={1}>
               {story.features.map((feature) => (
-                <FeatureItem key={feature.id} feature={feature} onEdit={onEditFeature} onCreateTask={onCreateTask} onRefresh={onRefresh} persons={persons} />
+                <FeatureItem key={feature.id} feature={feature} onEdit={onEditFeature} onCreateTask={onCreateTask} onRefresh={onRefresh} persons={persons} onEditTask={onEditTask} />
               ))}
             </Stack>
           ) : (
@@ -561,7 +564,7 @@ const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTa
   );
 };
 
-const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons }) => {
+const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons, onEditTask }) => {
   const isUser = actor.type === 'USER';
   const actorTasks = tasksFromStories(actor.stories);
   return (
@@ -612,6 +615,7 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
                 onCreateTask={onCreateTask}
                 onRefresh={onRefresh}
                 persons={persons}
+                onEditTask={onEditTask}
               />
             ))}
           </Stack>
@@ -1075,6 +1079,124 @@ const CreateTaskDialog = ({ open, onClose, onSave, feature, persons, submitting 
   );
 };
 
+const TaskEditDialog = ({ open, onClose, onSave, persons, projectId }) => {
+  const { enqueueSnackbar } = useSnackbar();
+  const [form, setForm] = useState({ title: '', status: 'todo', assignee: '', description: '', comments: [], links: [] });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [taskId, setTaskId] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (open?.id) {
+      setLoading(true);
+      setTaskId(open.id);
+      taskService.getTaskById(open.id).then((result) => {
+        if (result.success) {
+          const d = result.data;
+          setForm({
+            title: d.title || '',
+            status: normalizeStatus(d.status) || 'todo',
+            assignee: d.assignee || '',
+            description: d.description || '',
+            comments: d.comments || [],
+            links: d.links || [],
+          });
+        }
+        setLoading(false);
+      });
+    }
+  }, [open]);
+
+  const handleClose = () => {
+    setForm({ title: '', status: 'todo', assignee: '', description: '', comments: [], links: [] });
+    onClose();
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const patch = {
+      title: form.title,
+      status: form.status,
+      assignee: form.assignee,
+      description: form.description,
+      comments: form.comments,
+      links: form.links,
+    };
+    if (projectId) patch.projectId = projectId;
+    const result = await taskService.patchTask(taskId, patch);
+    setSaving(false);
+    if (result.success) { onSave(); handleClose(); }
+    else enqueueSnackbar(`Erreur : ${result.error}`, { variant: 'error' });
+  };
+
+  return (
+    <Dialog open={!!open} onClose={handleClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6" fontWeight={700}>Modifier la tâche</Typography>
+          <IconButton onClick={handleClose} size="small"><CloseIcon /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+        ) : (
+          <Stack spacing={3}>
+            <TextField fullWidth label="Titre" value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            <FormControl fullWidth>
+              <InputLabel>Statut</InputLabel>
+              <Select label="Statut" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {Object.entries(TASK_STATUS_LABEL).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: TASK_STATUS_COLOR[value], flexShrink: 0 }} />
+                      <span>{label}</span>
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Assigné à</InputLabel>
+              <Select label="Assigné à" value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
+                <MenuItem value=""><em>Non assigné</em></MenuItem>
+                {(persons || []).map((p) => (
+                  <MenuItem key={p.id} value={p.email}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Avatar sx={{ width: 24, height: 24, fontSize: '0.65rem', bgcolor: 'primary.main' }}>
+                        {p.firstName?.[0]}{p.lastName?.[0]}
+                      </Avatar>
+                      <span>{p.firstName} {p.lastName}</span>
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField fullWidth label="Description" value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })} multiline rows={3} />
+            <Divider />
+            <AbstractEntityEditor
+              comments={form.comments}
+              links={form.links}
+              onChangeComments={(c) => setForm({ ...form, comments: c })}
+              onChangeLinks={(l) => setForm({ ...form, links: l })}
+            />
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleClose} variant="outlined">Annuler</Button>
+        <Button onClick={handleSave} variant="contained" disabled={loading || saving}
+          startIcon={saving ? <CircularProgress size={16} /> : <EditIcon />}>
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 const FeatureTreePage = () => {
@@ -1101,6 +1223,7 @@ const FeatureTreePage = () => {
   // Dialog state — édition
   const [editStoryDialog, setEditStoryDialog] = useState(null); // story object or null
   const [editFeatureDialog, setEditFeatureDialog] = useState(null); // feature object or null
+  const [editTaskDialog, setEditTaskDialog] = useState(null); // task object or null
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -1396,6 +1519,7 @@ const FeatureTreePage = () => {
                 onEditStory={(s) => setEditStoryDialog(s)}
                 onEditFeature={(f) => setEditFeatureDialog(f)}
                 onCreateTask={(f) => setCreateTaskDialog(f)}
+                onEditTask={(t) => setEditTaskDialog(t)}
                 onRefresh={() => fetchTree(treeData.code)}
                 persons={persons}
               />
@@ -1457,6 +1581,14 @@ const FeatureTreePage = () => {
         feature={createTaskDialog}
         persons={persons}
         submitting={submitting}
+      />
+
+      <TaskEditDialog
+        open={editTaskDialog}
+        onClose={() => setEditTaskDialog(null)}
+        onSave={() => { setEditTaskDialog(null); fetchTree(treeData?.code); }}
+        persons={persons}
+        projectId={selectedProject?.id}
       />
 
       {/* Dialogs d'édition */}

@@ -530,7 +530,7 @@ const TasksPage = () => {
         icon: <CancelIcon fontSize="small" />
       };
     }
-    return statusOptions.find(opt => opt.value === status) || {
+    return statusOptions.find(opt => opt.value === status.toLowerCase()) || {
       label: status,
       color: 'default',
       icon: <AssignmentIcon fontSize="small" />
@@ -1482,7 +1482,7 @@ const TasksPage = () => {
                             </Stack>
                           </MenuItem>
                         ))}
-                        {task.status && !statusOptions.find(opt => opt.value === task.status) && (
+                        {task.status && !statusOptions.find(opt => opt.value === task.status.toLowerCase()) && (
                           <MenuItem value={task.status}>
                             <Typography variant="body2">
                               {task.status}
