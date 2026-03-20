@@ -28,19 +28,11 @@ import {
   Link as LinkIcon,
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { formatDateTime } from '../../utils/dateUtils';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const formatDate = (date) => {
-  if (!date) return '';
-  try {
-    return format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: fr });
-  } catch {
-    return '';
-  }
-};
+const formatDate = formatDateTime;
 
 const authorInitials = (author) =>
   (author || '')

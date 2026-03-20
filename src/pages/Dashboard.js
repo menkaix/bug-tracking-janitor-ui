@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -18,6 +18,7 @@ import {
   alpha,
   Paper,
   Stack,
+  Alert,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
@@ -59,21 +60,171 @@ import taskService from '../services/task.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import backlogService from '../services/backlog.service';
+import { FETCH_LIMITS } from '../config/api.config';
 import DashboardSkeleton from '../components/Common/DashboardSkeleton';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import OccupationCalendar from '../components/Dashboard/OccupationCalendar';
 import OccupationMap from '../components/Dashboard/OccupationMap';
 import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
 
+// ─── Fonctions de calcul KPI (pures, hors composant) ────────────────────────
+
+const calculateProjectKPIs = (tasks, projects) => {
+  const totalProjects = projects.length;
+  const projectsWithCalculatedStatus = projects.map(p => {
+    const projectTasks = tasks.filter(t => t.projectId === p.id);
+    const calculatedStatus = calculateProjectStatus(projectTasks);
+    return { ...p, calculatedStatus };
+  });
+  const activeProjects = projectsWithCalculatedStatus.filter(p => p.calculatedStatus === 'ACTIVE').length;
+  const completedProjects = projectsWithCalculatedStatus.filter(p => p.calculatedStatus === 'COMPLETED').length;
+  const activeProjectIds = new Set(
+    projectsWithCalculatedStatus.filter(p => p.calculatedStatus !== 'COMPLETED').map(p => p.id)
+  );
+  const activeTasks = tasks.filter(t => activeProjectIds.has(t.projectId));
+  const totalTasks = activeTasks.length;
+  let completedTasks = 0, inProgressTasks = 0, todoTasks = 0, pendingTasks = 0;
+  let todoEstimate = 0, pendingEstimate = 0;
+  activeTasks.forEach(t => {
+    const status = t.status ? t.status.toLowerCase() : '';
+    const est = parseFloat(t.estimatedManHours) || 0;
+    if (status === 'done') completedTasks++;
+    else if (status === 'in-progress' || status === 'in_progress' || status === 'inprogress') inProgressTasks++;
+    else if (status === 'todo' || status === 'to-do') { todoTasks++; todoEstimate += est; }
+    else if (status === 'pending') { pendingTasks++; pendingEstimate += est; }
+  });
+  const completionRate = totalTasks > 0 ? parseFloat(((completedTasks / totalTasks) * 100).toFixed(1)) : 0;
+  const averageTasksPerProject = activeProjectIds.size > 0 ? parseFloat((totalTasks / activeProjectIds.size).toFixed(1)) : 0;
+  const tasksByPriority = { high: 0, medium: 0, low: 0 };
+  activeTasks.forEach(t => {
+    const priority = t.priority ? t.priority.toLowerCase() : '';
+    if (priority === 'high' || priority === 'haute') tasksByPriority.high++;
+    else if (priority === 'medium' || priority === 'moyenne') tasksByPriority.medium++;
+    else if (priority === 'low' || priority === 'basse' || priority === 'faible') tasksByPriority.low++;
+  });
+  const now = new Date();
+  const projectsWithDelays = projectsWithCalculatedStatus.filter(p => {
+    if (p.calculatedStatus !== 'ACTIVE') return false;
+    return tasks.filter(t => t.projectId === p.id).some(t => {
+      const s = t.status ? t.status.toLowerCase() : '';
+      if (s !== 'done' && t.dueDate) { try { return new Date(t.dueDate) < now; } catch { return false; } }
+      return false;
+    });
+  }).length;
+  const projectDetails = projects.map(project => {
+    const pt = tasks.filter(t => t.projectId === project.id);
+    const projectTotal = pt.length;
+    const s = (t) => (t.status || '').toLowerCase();
+    const projectCompleted = pt.filter(t => s(t) === 'done').length;
+    const projectInProgress = pt.filter(t => ['in-progress','in_progress','inprogress'].includes(s(t))).length;
+    const projectTodo = pt.filter(t => ['todo','to-do'].includes(s(t))).length;
+    const projectPending = pt.filter(t => s(t) === 'pending').length;
+    const projectToStudy = pt.filter(t => s(t) === 'to-study').length;
+    const projectToTest = pt.filter(t => s(t) === 'to-test').length;
+    const projectTesting = pt.filter(t => s(t) === 'testing').length;
+    const projectCanceled = pt.filter(t => ['canceled','cancelled'].includes(s(t))).length;
+    const projectNoStatus = pt.filter(t => !t.status || t.status.trim() === '').length;
+    const projectCompletionRate = projectTotal > 0 ? parseFloat(((projectCompleted / projectTotal) * 100).toFixed(1)) : 0;
+    const calculatedStatus = calculateProjectStatus(pt);
+    const hasDelay = pt.some(t => {
+      if (s(t) !== 'done' && t.dueDate) { try { return new Date(t.dueDate) < now; } catch { return false; } }
+      return false;
+    });
+    const assignedPersonsSet = new Set();
+    pt.forEach(t => {
+      if (t.assignee) t.assignee.split(',').map(e => e.trim().toLowerCase()).filter(e => e).forEach(e => assignedPersonsSet.add(e));
+    });
+    return {
+      id: project.id, name: project.projectName || 'Sans nom', code: project.projectCode || '',
+      status: calculatedStatus, totalTasks: projectTotal, completedTasks: projectCompleted,
+      inProgressTasks: projectInProgress, todoTasks: projectTodo, pendingTasks: projectPending,
+      toStudyTasks: projectToStudy, toTestTasks: projectToTest, testingTasks: projectTesting,
+      canceledTasks: projectCanceled, noStatusTasks: projectNoStatus,
+      completionRate: projectCompletionRate, hasDelay,
+      assignedPersonsCount: assignedPersonsSet.size, totalComments: 0, totalLinks: 0,
+    };
+  }).sort((a, b) => b.totalTasks - a.totalTasks);
+  return {
+    totalProjects, activeProjects, completedProjects, projectsWithDelays,
+    totalTasks, completedTasks, inProgressTasks, todoTasks, pendingTasks,
+    todoEstimate: parseFloat(todoEstimate.toFixed(1)), pendingEstimate: parseFloat(pendingEstimate.toFixed(1)),
+    completionRate, averageTasksPerProject, tasksByPriority, projectDetails,
+  };
+};
+
+const calculatePersonKPIs = (tasks, persons) => {
+  const totalPersons = persons.length;
+  if (totalPersons === 0) {
+    return {
+      totalPersons: 0, activePersons: 0, totalTasksAssigned: 0,
+      completedTasksByPersons: 0, inProgressTasksByPersons: 0, todoTasksByPersons: 0, pendingTasksByPersons: 0,
+      todoEstimateByPersons: 0, pendingEstimateByPersons: 0, averageTasksPerPerson: 0, averageCompletionRate: 0,
+      personsWithOverload: 0, personsWithNoTasks: 0, personsWithLowActivity: 0, topPerformers: [], workloadDistribution: [],
+    };
+  }
+  const personsByEmail = Object.fromEntries(persons.filter(p => p.email).map(p => [p.email.toLowerCase(), p]));
+  const tasksByPerson = Object.fromEntries(
+    persons.map(p => [p.id, { person: p, total: 0, completed: 0, inProgress: 0, todo: 0, pending: 0, other: 0, completionRate: 0 }])
+  );
+  let totalTasksAssigned = 0, completedTasksByPersons = 0, inProgressTasksByPersons = 0;
+  let todoTasksByPersons = 0, pendingTasksByPersons = 0, todoEstimateByPersons = 0, pendingEstimateByPersons = 0;
+  tasks.forEach(t => {
+    if (!t.assignee) return;
+    t.assignee.split(',').map(e => e.trim().toLowerCase()).filter(e => e).forEach(email => {
+      const person = personsByEmail[email];
+      if (!person || !tasksByPerson[person.id]) return;
+      tasksByPerson[person.id].total++;
+      totalTasksAssigned++;
+      const status = (t.status || '').toLowerCase();
+      if (status === 'done') { tasksByPerson[person.id].completed++; completedTasksByPersons++; }
+      else if (['in-progress','in_progress','inprogress'].includes(status)) { tasksByPerson[person.id].inProgress++; inProgressTasksByPersons++; }
+      else if (['todo','to-do'].includes(status)) { tasksByPerson[person.id].todo++; todoTasksByPersons++; todoEstimateByPersons += parseFloat(t.estimatedManHours) || 0; }
+      else if (status === 'pending') { tasksByPerson[person.id].pending++; pendingTasksByPersons++; pendingEstimateByPersons += parseFloat(t.estimatedManHours) || 0; }
+      else tasksByPerson[person.id].other++;
+    });
+  });
+  Object.values(tasksByPerson).forEach(p => {
+    if (p.total > 0) p.completionRate = parseFloat(((p.completed / p.total) * 100).toFixed(1));
+  });
+  const averageTasksPerPerson = parseFloat((totalTasksAssigned / totalPersons).toFixed(1));
+  const activePersonsList = Object.values(tasksByPerson).filter(p => p.total > 0);
+  const averageCompletionRate = activePersonsList.length > 0
+    ? parseFloat((activePersonsList.reduce((sum, p) => sum + p.completionRate, 0) / activePersonsList.length).toFixed(1)) : 0;
+  const personsWithNoTasks = Object.values(tasksByPerson).filter(p => p.total === 0).length;
+  const topPerformers = Object.values(tasksByPerson).filter(p => p.completed > 0)
+    .sort((a, b) => b.completed !== a.completed ? b.completed - a.completed : b.completionRate - a.completionRate)
+    .slice(0, 5).map(p => ({
+      name: `${p.person.firstName || ''} ${p.person.lastName || ''}`.trim() || 'Sans nom',
+      completed: p.completed, total: p.total, completionRate: p.completionRate.toFixed(0),
+    }));
+  const workloadDistribution = Object.values(tasksByPerson).filter(p => p.total > 0)
+    .map(p => ({
+      name: `${p.person.firstName || ''} ${p.person.lastName || ''}`.trim() || 'Sans nom',
+      total: p.total, completed: p.completed, inProgress: p.inProgress, todo: p.todo, pending: p.pending,
+      activeTasks: p.inProgress + p.todo + p.pending,
+    })).sort((a, b) => b.activeTasks - a.activeTasks);
+  return {
+    totalPersons, activePersons: totalPersons - personsWithNoTasks, totalTasksAssigned,
+    completedTasksByPersons, inProgressTasksByPersons, todoTasksByPersons, pendingTasksByPersons,
+    todoEstimateByPersons: parseFloat(todoEstimateByPersons.toFixed(1)),
+    pendingEstimateByPersons: parseFloat(pendingEstimateByPersons.toFixed(1)),
+    averageTasksPerPerson, averageCompletionRate,
+    personsWithOverload: Object.values(tasksByPerson).filter(p => p.inProgress + p.todo + p.pending + p.other > 10).length,
+    personsWithNoTasks, personsWithLowActivity: Object.values(tasksByPerson).filter(p => p.total > 0 && p.total <= 3).length,
+    topPerformers, workloadDistribution,
+  };
+};
+
 /**
  * Récupère les données brutes du dashboard depuis le backend.
  * Fonction pure utilisée par React Query (mise en cache automatique).
  */
 const fetchDashboardData = async () => {
+  const limit = FETCH_LIMITS.DASHBOARD;
   const [tasksResult, projectsResult, personsResult] = await Promise.all([
-    taskService.getAllTasks(0, 10000),
-    projectService.getAllProjects(0, 10000),
-    personService.getAllPersons(0, 10000),
+    taskService.getAllTasks(0, limit),
+    projectService.getAllProjects(0, limit),
+    personService.getAllPersons(0, limit),
   ]);
 
   if (!tasksResult.success || !projectsResult.success || !personsResult.success) {
@@ -84,6 +235,11 @@ const fetchDashboardData = async () => {
     tasks: tasksResult.data.content || [],
     projects: projectsResult.data.content || [],
     persons: personsResult.data.content || [],
+    truncated: {
+      tasks: (tasksResult.data.totalElements || 0) > limit,
+      projects: (projectsResult.data.totalElements || 0) > limit,
+      persons: (personsResult.data.totalElements || 0) > limit,
+    },
   };
 };
 
@@ -105,10 +261,12 @@ const Dashboard = () => {
   const allTasks = useMemo(() => dashboardRaw?.tasks || [], [dashboardRaw]);
   const allProjects = useMemo(() => dashboardRaw?.projects || [], [dashboardRaw]);
   const allPersons = useMemo(() => dashboardRaw?.persons || [], [dashboardRaw]);
+  const isTruncated = dashboardRaw?.truncated
+    ? Object.values(dashboardRaw.truncated).some(Boolean)
+    : false;
 
   const [activeTab, setActiveTab] = useState(0);
   const [occupationSubTab, setOccupationSubTab] = useState(0);
-  const [projectMetaMap, setProjectMetaMap] = useState({});
 
   // State for Edit Modal
   const [showModal, setShowModal] = useState(false);
@@ -125,369 +283,38 @@ const Dashboard = () => {
     assignees: [],
   });
 
-  const calculateProjectKPIs = (tasks, projects) => {
-    const totalProjects = projects.length;
+  // ─── Projets non terminés — base pour useQueries metadata ──────────────────
+  const nonCompletedProjects = useMemo(() =>
+    allProjects.filter(p => {
+      const pt = allTasks.filter(t => t.projectId === p.id);
+      return calculateProjectStatus(pt) !== 'COMPLETED';
+    }).slice(0, 10),
+  [allProjects, allTasks]);
 
-    // Calculer le statut de chaque projet basé sur ses tâches
-    const projectsWithCalculatedStatus = projects.map(p => {
-      const projectTasks = tasks.filter(t => t.projectId === p.id);
-      const calculatedStatus = calculateProjectStatus(projectTasks);
-      return { ...p, calculatedStatus };
-    });
-
-    const activeProjects = projectsWithCalculatedStatus.filter(p =>
-      p.calculatedStatus === 'ACTIVE'
-    ).length;
-
-    const completedProjects = projectsWithCalculatedStatus.filter(p =>
-      p.calculatedStatus === 'COMPLETED'
-    ).length;
-
-    // IDs des projets non terminés — utilisés pour filtrer les tâches des indicateurs
-    const activeProjectIds = new Set(
-      projectsWithCalculatedStatus
-        .filter(p => p.calculatedStatus !== 'COMPLETED')
-        .map(p => p.id)
-    );
-    const activeTasks = tasks.filter(t => activeProjectIds.has(t.projectId));
-
-    const totalTasks = activeTasks.length;
-
-    let completedTasks = 0;
-    let inProgressTasks = 0;
-    let todoTasks = 0;
-    let pendingTasks = 0;
-    let todoEstimate = 0;
-    let pendingEstimate = 0;
-
-    activeTasks.forEach(t => {
-      const status = t.status ? t.status.toLowerCase() : '';
-      const est = parseFloat(t.estimatedManHours) || 0;
-
-      if (status === 'done') {
-        completedTasks++;
-      } else if (status === 'in-progress' || status === 'in_progress' || status === 'inprogress') {
-        inProgressTasks++;
-      } else if (status === 'todo' || status === 'to-do') {
-        todoTasks++;
-        todoEstimate += est;
-      } else if (status === 'pending') {
-        pendingTasks++;
-        pendingEstimate += est;
-      }
-    });
-
-    const completionRate = totalTasks > 0 ? parseFloat(((completedTasks / totalTasks) * 100).toFixed(1)) : 0;
-    const activeProjectsCount = activeProjectIds.size;
-    const averageTasksPerProject = activeProjectsCount > 0 ? parseFloat((totalTasks / activeProjectsCount).toFixed(1)) : 0;
-
-    const tasksByPriority = {
-      high: 0,
-      medium: 0,
-      low: 0,
-    };
-
-    activeTasks.forEach(t => {
-      const priority = t.priority ? t.priority.toLowerCase() : '';
-      if (priority === 'high' || priority === 'haute') {
-        tasksByPriority.high++;
-      } else if (priority === 'medium' || priority === 'moyenne') {
-        tasksByPriority.medium++;
-      } else if (priority === 'low' || priority === 'basse' || priority === 'faible') {
-        tasksByPriority.low++;
-      }
-    });
-
-    const now = new Date();
-    const projectsWithDelays = projectsWithCalculatedStatus.filter(p => {
-      // Seulement les projets actifs peuvent être en retard
-      if (p.calculatedStatus !== 'ACTIVE') return false;
-
-      const projectTasks = tasks.filter(t => t.projectId === p.id);
-      return projectTasks.some(t => {
-        const taskStatus = t.status ? t.status.toLowerCase() : '';
-        if (taskStatus !== 'done' && t.dueDate) {
-          try {
-            return new Date(t.dueDate) < now;
-          } catch (e) {
-            return false;
-          }
-        }
-        return false;
-      });
-    }).length;
-
-    const projectDetails = projects.map(project => {
-      const projectTasks = tasks.filter(t => t.projectId === project.id);
-      const projectTotal = projectTasks.length;
-
-      // Compter les tâches par statut
-      const projectCompleted = projectTasks.filter(t => t.status && t.status.toLowerCase() === 'done').length;
-      const projectInProgress = projectTasks.filter(t => {
-        const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'in-progress' || status === 'in_progress' || status === 'inprogress';
-      }).length;
-      const projectTodo = projectTasks.filter(t => {
-        const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'todo' || status === 'to-do';
-      }).length;
-      const projectPending = projectTasks.filter(t => {
-        const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'pending';
-      }).length;
-      const projectToStudy = projectTasks.filter(t => {
-        const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'to-study';
-      }).length;
-      const projectToTest = projectTasks.filter(t => {
-        const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'to-test';
-      }).length;
-      const projectTesting = projectTasks.filter(t => {
-        const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'testing';
-      }).length;
-      const projectCanceled = projectTasks.filter(t => {
-        const status = t.status ? t.status.toLowerCase() : '';
-        return status === 'canceled' || status === 'cancelled';
-      }).length;
-      const projectNoStatus = projectTasks.filter(t => !t.status || t.status.trim() === '').length;
-
-      const projectCompletionRate = projectTotal > 0 ? parseFloat(((projectCompleted / projectTotal) * 100).toFixed(1)) : 0;
-
-      // Calculer le statut basé sur les tâches
-      const calculatedStatus = calculateProjectStatus(projectTasks);
-
-      const hasDelay = projectTasks.some(t => {
-        const taskStatus = t.status ? t.status.toLowerCase() : '';
-        if (taskStatus !== 'done' && t.dueDate) {
-          try {
-            return new Date(t.dueDate) < now;
-          } catch (e) {
-            return false;
-          }
-        }
-        return false;
-      });
-
-      const assignedPersonsSet = new Set();
-      projectTasks.forEach(t => {
-        if (t.assignee) {
-          const emails = t.assignee.split(',').map(e => e.trim().toLowerCase()).filter(e => e);
-          emails.forEach(email => assignedPersonsSet.add(email));
-        }
-      });
-
-      return {
-        id: project.id,
-        name: project.projectName || 'Sans nom',
-        code: project.projectCode || '',
-        status: calculatedStatus, // Utiliser le statut calculé
-        totalTasks: projectTotal,
-        completedTasks: projectCompleted,
-        inProgressTasks: projectInProgress,
-        todoTasks: projectTodo,
-        pendingTasks: projectPending,
-        toStudyTasks: projectToStudy,
-        toTestTasks: projectToTest,
-        testingTasks: projectTesting,
-        canceledTasks: projectCanceled,
-        noStatusTasks: projectNoStatus,
-        completionRate: projectCompletionRate,
-        hasDelay,
-        assignedPersonsCount: assignedPersonsSet.size,
-        totalComments: 0,
-        totalLinks: 0,
-      };
-    }).sort((a, b) => b.totalTasks - a.totalTasks);
-
-    return {
-      totalProjects,
-      activeProjects,
-      completedProjects,
-      projectsWithDelays,
-      totalTasks,
-      completedTasks,
-      inProgressTasks,
-      todoTasks,
-      pendingTasks,
-      todoEstimate: parseFloat(todoEstimate.toFixed(1)),
-      pendingEstimate: parseFloat(pendingEstimate.toFixed(1)),
-      completionRate,
-      averageTasksPerProject,
-      tasksByPriority,
-      projectDetails,
-    };
-  };
-
-  const calculatePersonKPIs = (tasks, persons) => {
-    const totalPersons = persons.length;
-
-    if (totalPersons === 0) {
-      return {
-        totalPersons: 0,
-        activePersons: 0,
-        totalTasksAssigned: 0,
-        completedTasksByPersons: 0,
-        inProgressTasksByPersons: 0,
-        todoTasksByPersons: 0,
-        pendingTasksByPersons: 0,
-        todoEstimateByPersons: 0,
-        pendingEstimateByPersons: 0,
-        averageTasksPerPerson: 0,
-        averageCompletionRate: 0,
-        personsWithOverload: 0,
-        personsWithNoTasks: 0,
-        personsWithLowActivity: 0,
-        topPerformers: [],
-        workloadDistribution: [],
-      };
-    }
-
-    const personsByEmail = {};
-    persons.forEach(p => {
-      if (p.email) {
-        personsByEmail[p.email.toLowerCase()] = p;
-      }
-    });
-
-    const tasksByPerson = {};
-    persons.forEach(p => {
-      tasksByPerson[p.id] = {
-        person: p,
-        total: 0,
-        completed: 0,
-        inProgress: 0,
-        todo: 0,
-        pending: 0,
-        other: 0,
-        completionRate: 0,
-      };
-    });
-
-    let totalTasksAssigned = 0;
-    let completedTasksByPersons = 0;
-    let inProgressTasksByPersons = 0;
-    let todoTasksByPersons = 0;
-    let pendingTasksByPersons = 0;
-    let todoEstimateByPersons = 0;
-    let pendingEstimateByPersons = 0;
-
-    tasks.forEach(t => {
-      if (t.assignee) {
-        const assigneeEmails = t.assignee
-          .split(',')
-          .map(e => e.trim().toLowerCase())
-          .filter(e => e);
-
-        assigneeEmails.forEach(email => {
-          const person = personsByEmail[email];
-
-          if (person && tasksByPerson[person.id]) {
-            tasksByPerson[person.id].total++;
-            totalTasksAssigned++;
-
-            const status = t.status ? t.status.toLowerCase() : '';
-
-            if (status === 'done') {
-              tasksByPerson[person.id].completed++;
-              completedTasksByPersons++;
-            } else if (status === 'in-progress' || status === 'in_progress' || status === 'inprogress') {
-              tasksByPerson[person.id].inProgress++;
-              inProgressTasksByPersons++;
-            } else if (status === 'todo' || status === 'to-do') {
-              tasksByPerson[person.id].todo++;
-              todoTasksByPersons++;
-              todoEstimateByPersons += parseFloat(t.estimatedManHours) || 0;
-            } else if (status === 'pending') {
-              tasksByPerson[person.id].pending++;
-              pendingTasksByPersons++;
-              pendingEstimateByPersons += parseFloat(t.estimatedManHours) || 0;
-            } else {
-              tasksByPerson[person.id].other++;
-            }
-          }
-        });
-      }
-    });
-
-    Object.values(tasksByPerson).forEach(p => {
-      if (p.total > 0) {
-        p.completionRate = parseFloat(((p.completed / p.total) * 100).toFixed(1));
-      }
-    });
-
-    const averageTasksPerPerson = parseFloat((totalTasksAssigned / totalPersons).toFixed(1));
-
-    const activePersonsList = Object.values(tasksByPerson).filter(p => p.total > 0);
-    const averageCompletionRate = activePersonsList.length > 0
-      ? parseFloat((activePersonsList.reduce((sum, p) => sum + p.completionRate, 0) / activePersonsList.length).toFixed(1))
-      : 0;
-
-    const personsWithOverload = Object.values(tasksByPerson).filter(p => {
-      const activeTasks = p.inProgress + p.todo + p.pending + p.other;
-      return activeTasks > 10;
-    }).length;
-
-    const personsWithNoTasks = Object.values(tasksByPerson).filter(p => p.total === 0).length;
-
-    const personsWithLowActivity = Object.values(tasksByPerson).filter(p =>
-      p.total > 0 && p.total <= 3
-    ).length;
-
-    const activePersons = totalPersons - personsWithNoTasks;
-
-    const topPerformers = Object.values(tasksByPerson)
-      .filter(p => p.completed > 0)
-      .sort((a, b) => {
-        if (b.completed !== a.completed) {
-          return b.completed - a.completed;
-        }
-        return b.completionRate - a.completionRate;
-      })
-      .slice(0, 5)
-      .map(p => ({
-        name: `${p.person.firstName || ''} ${p.person.lastName || ''}`.trim() || 'Sans nom',
-        completed: p.completed,
-        total: p.total,
-        completionRate: p.completionRate.toFixed(0),
-      }));
-
-    const workloadDistribution = Object.values(tasksByPerson)
-      .filter(p => p.total > 0)
-      .map(p => {
-        const activeTasks = p.inProgress + p.todo + p.pending;
+  // Cache React Query pour commentaires/liens des projets actifs
+  const projectMetaQueries = useQueries({
+    queries: nonCompletedProjects.map(p => ({
+      queryKey: ['projectMeta', p.id],
+      queryFn: async () => {
+        const result = await backlogService.getEntity('projects', p.id);
+        if (!result.success) return null;
         return {
-          name: `${p.person.firstName || ''} ${p.person.lastName || ''}`.trim() || 'Sans nom',
-          total: p.total,
-          completed: p.completed,
-          inProgress: p.inProgress,
-          todo: p.todo,
-          pending: p.pending,
-          activeTasks: activeTasks,
+          totalComments: Array.isArray(result.data.comments) ? result.data.comments.length : 0,
+          totalLinks: Array.isArray(result.data.links) ? result.data.links.length : 0,
         };
-      })
-      .sort((a, b) => b.activeTasks - a.activeTasks);
+      },
+      staleTime: 10 * 60 * 1000,
+    })),
+  });
 
-    return {
-      totalPersons,
-      activePersons,
-      totalTasksAssigned,
-      completedTasksByPersons,
-      inProgressTasksByPersons,
-      todoTasksByPersons,
-      pendingTasksByPersons,
-      todoEstimateByPersons: parseFloat(todoEstimateByPersons.toFixed(1)),
-      pendingEstimateByPersons: parseFloat(pendingEstimateByPersons.toFixed(1)),
-      averageTasksPerPerson,
-      averageCompletionRate,
-      personsWithOverload,
-      personsWithNoTasks,
-      personsWithLowActivity,
-      topPerformers,
-      workloadDistribution,
-    };
-  };
+  const projectMetaMap = useMemo(() => {
+    const map = {};
+    nonCompletedProjects.forEach((project, i) => {
+      const data = projectMetaQueries[i]?.data;
+      if (data) map[project.id] = data;
+    });
+    return map;
+  }, [nonCompletedProjects, projectMetaQueries]);
 
   // --- KPIs calculés depuis les données en cache (recalcul uniquement si données changent) ---
   const projectsData = useMemo(() => {
@@ -500,43 +327,13 @@ const Dashboard = () => {
         ...(projectMetaMap[pd.id] || {}),
       })),
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTasks, allProjects, projectMetaMap]);
 
   const personsData = useMemo(
     () => calculatePersonKPIs(allTasks, allPersons),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [allTasks, allPersons]
   );
 
-  // --- Fetch secondaire : commentaires/liens des projets actifs (non bloquant) ---
-  useEffect(() => {
-    if (allProjects.length === 0) return;
-    const nonCompleted = allProjects
-      .filter(p => {
-        const pt = allTasks.filter(t => t.projectId === p.id);
-        return calculateProjectStatus(pt) !== 'COMPLETED';
-      })
-      .slice(0, 10);
-
-    Promise.allSettled(
-      nonCompleted.map(p => backlogService.getEntity('projects', p.id))
-    ).then(results => {
-      const map = {};
-      nonCompleted.forEach((project, i) => {
-        const r = results[i];
-        if (r.status === 'fulfilled' && r.value.success) {
-          const data = r.value.data;
-          map[project.id] = {
-            totalComments: Array.isArray(data.comments) ? data.comments.length : 0,
-            totalLinks: Array.isArray(data.links) ? data.links.length : 0,
-          };
-        }
-      });
-      setProjectMetaMap(map);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allProjects]);
 
   if (isLoading) return <DashboardSkeleton />;
   if (isError) return <ErrorMessage message="Impossible de charger les données du tableau de bord" onRetry={refetch} />;
@@ -674,6 +471,13 @@ const Dashboard = () => {
           Indicateurs de performance et contrôle de gestion
         </Typography>
       </Box>
+
+      {/* Alerte données tronquées */}
+      {isTruncated && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          Les données affichées sont limitées à {FETCH_LIMITS.DASHBOARD} éléments par collection. Certaines statistiques peuvent être incomplètes.
+        </Alert>
+      )}
 
       {/* Onglets */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>

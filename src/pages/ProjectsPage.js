@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useSnackbar } from 'notistack';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -36,185 +35,45 @@ import {
   Link as LinkIcon,
   AccountTree as TreeIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import projectService from '../services/project.service';
-import taskService from '../services/task.service';
-import backlogService from '../services/backlog.service';
+import { formatDateLong } from '../utils/dateUtils';
 import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
-import { calculateProjectStatus, getProjectStatusInfo } from '../utils/projectStatus';
+import { getProjectStatusInfo } from '../utils/projectStatus';
+import { useProjects } from '../hooks/useProjects';
 
-const formatDate = (date) => {
-  if (!date) return null;
-  try {
-    return format(new Date(date), 'dd MMM yyyy', { locale: fr });
-  } catch {
-    return null;
-  }
-};
+const formatDate = formatDateLong;
 
 /**
- * Page de gestion des projets - Material UI 2025
+ * Page de gestion des projets — délègue toute la logique à useProjects.
  */
 const ProjectsPage = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
-  const [projects, setProjects] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [pagination, setPagination] = useState({
-    currentPage: 0,
-    totalPages: 0,
-    totalElements: 0,
-    size: 100,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editingProject, setEditingProject] = useState(null);
-  const [formData, setFormData] = useState({
-    projectName: '',
-    projectCode: '',
-    description: '',
-    comments: [],
-    links: [],
-  });
 
-  const loadProjects = async (page = 0) => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const [projectsResult, tasksResult] = await Promise.all([
-        projectService.getAllProjects(page, pagination.size, searchTerm),
-        taskService.getAllTasks(0, 10000),
-      ]);
-
-      if (projectsResult.success) {
-        setProjects(projectsResult.data.content || []);
-        setPagination({
-          currentPage: projectsResult.data.currentPage,
-          totalPages: projectsResult.data.totalPages,
-          totalElements: projectsResult.data.totalElements,
-          size: projectsResult.data.size,
-        });
-      } else {
-        setError(projectsResult.error || 'Impossible de charger les projets');
-      }
-
-      if (tasksResult.success) {
-        setTasks(tasksResult.data.content || []);
-      }
-    } catch (err) {
-      setError('Une erreur est survenue lors du chargement des projets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProjects();
-    // eslint-disable-next-line
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadProjects(0);
-    }, 500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line
-  }, [searchTerm]);
-
-  const handlePageChange = (page) => {
-    loadProjects(page);
-  };
-
-  const handlePageSizeChange = (newSize) => {
-    setPagination(prev => ({ ...prev, size: newSize }));
-    loadProjects(0); // Retourner à la première page lors du changement de taille
-  };
-
-  const handleCreateProject = () => {
-    setEditingProject(null);
-    setFormData({ projectName: '', projectCode: '', description: '', comments: [], links: [] });
-    setShowModal(true);
-  };
-
-  const handleEditProject = async (project) => {
-    setEditingProject(project);
-    setFormData({
-      projectName: project.projectName || '',
-      projectCode: project.projectCode || '',
-      description: project.description || '',
-      comments: [],
-      links: [],
-    });
-    setShowModal(true);
-    // Charger les commentaires et liens depuis le backend
-    const result = await backlogService.getEntity('projects', project.id);
-    if (result.success) {
-      setFormData((prev) => ({
-        ...prev,
-        comments: result.data.comments || [],
-        links: result.data.links || [],
-      }));
-    }
-  };
-
-  const handleDeleteProject = async (id) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce projet ?')) return;
-
-    const result = await projectService.deleteProject(id);
-    if (result.success) {
-      // Si on supprime le dernier projet de la page et qu'on n'est pas sur la première page,
-      // revenir à la page précédente
-      const willBeEmpty = projects.length === 1;
-      const notFirstPage = pagination.currentPage > 0;
-      const targetPage = willBeEmpty && notFirstPage ? pagination.currentPage - 1 : pagination.currentPage;
-      loadProjects(targetPage);
-    } else {
-      enqueueSnackbar('Erreur lors de la suppression du projet', { variant: 'error' });
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    let result;
-    if (editingProject) {
-      result = await projectService.updateProject(editingProject.id, formData);
-      // PATCH comments et liens séparément
-      if (result.success) {
-        await backlogService.patchEntity('projects', editingProject.id, {
-          comments: formData.comments,
-          links: formData.links,
-        });
-      }
-    } else {
-      result = await projectService.createProject(formData);
-    }
-
-    if (result.success) {
-      setShowModal(false);
-      loadProjects(pagination.currentPage);
-    } else {
-      enqueueSnackbar('Erreur lors de la sauvegarde du projet', { variant: 'error' });
-    }
-  };
-
-  const handleViewTasks = (projectId) => {
-    navigate(`/tasks?projectId=${projectId}`);
-  };
-
-  // Fonction pour obtenir le statut calculé d'un projet
-  const getCalculatedStatus = (projectId) => {
-    const projectTasks = tasks.filter(t => t.projectId === projectId);
-    return calculateProjectStatus(projectTasks);
-  };
+  const {
+    projects,
+    loading,
+    error,
+    pagination,
+    searchTerm,
+    setSearchTerm,
+    showModal,
+    setShowModal,
+    editingProject,
+    formData,
+    setFormData,
+    loadProjects,
+    handlePageChange,
+    handlePageSizeChange,
+    handleCreateProject,
+    handleEditProject,
+    handleDeleteProject,
+    handleSubmit,
+    handleViewTasks,
+    getCalculatedStatus,
+  } = useProjects();
 
   if (loading && projects.length === 0) return <Loading message="Chargement des projets..." />;
 
@@ -235,12 +94,7 @@ const ProjectsPage = () => {
           startIcon={<AddIcon />}
           onClick={handleCreateProject}
           size="medium"
-          sx={{
-            borderRadius: 2,
-            px: 2,
-            py: 1,
-            fontWeight: 500,
-          }}
+          sx={{ borderRadius: 2, px: 2, py: 1, fontWeight: 500 }}
         >
           Nouveau Projet
         </Button>
@@ -253,19 +107,12 @@ const ProjectsPage = () => {
           placeholder="Rechercher un projet..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-          }}
-          sx={{
-            maxWidth: 600,
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 3,
-            },
-          }}
+          InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
+          sx={{ maxWidth: 600, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
         />
       </Box>
 
-      {error && <ErrorMessage message={error} onRetry={() => loadProjects(pagination.currentPage)} />}
+      {error && <ErrorMessage message={error} onRetry={loadProjects} />}
 
       {/* Grille des projets */}
       <Box
@@ -280,21 +127,20 @@ const ProjectsPage = () => {
           mb: 4,
         }}
       >
-        {projects.map((project) => (
-          <Card
-            key={project.id}
-            sx={{
-              height: 420, // Hauteur fixe pour toutes les cartes
-              display: 'flex',
-              flexDirection: 'column',
-              borderRadius: 3,
-              transition: 'all 0.3s ease-in-out',
-              '&:hover': {
-                transform: 'translateY(-8px)',
-                boxShadow: 6,
-              },
-            }}
-          >
+        {projects.map((project) => {
+          const statusInfo = getProjectStatusInfo(getCalculatedStatus(project.id));
+          return (
+            <Card
+              key={project.id}
+              sx={{
+                height: 420,
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: 3,
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': { transform: 'translateY(-8px)', boxShadow: 6 },
+              }}
+            >
               <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 3 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -302,20 +148,14 @@ const ProjectsPage = () => {
                       icon={<FolderIcon />}
                       label={project.projectCode}
                       color="primary"
-                      sx={{
-                        fontWeight: 700,
-                        borderRadius: 2,
-                      }}
+                      sx={{ fontWeight: 700, borderRadius: 2 }}
                     />
                     {project.clientName && (
                       <Chip
                         icon={<BusinessIcon />}
                         label={project.clientName}
                         color="secondary"
-                        sx={{
-                          fontWeight: 700,
-                          borderRadius: 2,
-                        }}
+                        sx={{ fontWeight: 700, borderRadius: 2 }}
                       />
                     )}
                   </Stack>
@@ -323,24 +163,14 @@ const ProjectsPage = () => {
                     <IconButton
                       size="small"
                       onClick={() => handleEditProject(project)}
-                      sx={{
-                        '&:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                          color: 'primary.main',
-                        },
-                      }}
+                      sx={{ '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' } }}
                     >
                       <EditIcon fontSize="small" />
                     </IconButton>
                     <IconButton
                       size="small"
                       onClick={() => handleDeleteProject(project.id)}
-                      sx={{
-                        '&:hover': {
-                          backgroundColor: alpha(theme.palette.error.main, 0.1),
-                          color: 'error.main',
-                        },
-                      }}
+                      sx={{ '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.1), color: 'error.main' } }}
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -352,7 +182,7 @@ const ProjectsPage = () => {
                   fontWeight={700}
                   gutterBottom
                   sx={{
-                    height: '3.2em', // Hauteur fixe pour max 2 lignes
+                    height: '3.2em',
                     lineHeight: 1.6,
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
@@ -370,7 +200,7 @@ const ProjectsPage = () => {
                   variant="body2"
                   color="text.secondary"
                   sx={{
-                    height: '4.5em', // Hauteur fixe pour 3 lignes
+                    height: '4.5em',
                     lineHeight: 1.5,
                     display: '-webkit-box',
                     WebkitLineClamp: 3,
@@ -386,18 +216,8 @@ const ProjectsPage = () => {
                 </Typography>
 
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 'auto' }}>
-                  {(() => {
-                    const calculatedStatus = getCalculatedStatus(project.id);
-                    const statusInfo = getProjectStatusInfo(calculatedStatus);
-                    return (
-                      <Chip
-                        label={statusInfo.label}
-                        size="small"
-                        color={statusInfo.color}
-                      />
-                    );
-                  })()}
-                  {(project.links?.length > 0) && (
+                  <Chip label={statusInfo.label} size="small" color={statusInfo.color} />
+                  {project.links?.length > 0 && (
                     <Chip
                       icon={<LinkIcon sx={{ fontSize: '0.8rem !important' }} />}
                       label={project.links.length}
@@ -434,10 +254,7 @@ const ProjectsPage = () => {
                   variant="outlined"
                   startIcon={<VisibilityIcon />}
                   onClick={() => handleViewTasks(project.id)}
-                  sx={{
-                    borderRadius: 2,
-                    fontWeight: 600,
-                  }}
+                  sx={{ borderRadius: 2, fontWeight: 600 }}
                 >
                   Voir les tâches
                 </Button>
@@ -447,26 +264,18 @@ const ProjectsPage = () => {
                   color="secondary"
                   startIcon={<TreeIcon />}
                   onClick={() => navigate(`/feature-tree?projectCode=${project.projectCode}`)}
-                  sx={{
-                    borderRadius: 2,
-                    fontWeight: 600,
-                  }}
+                  sx={{ borderRadius: 2, fontWeight: 600 }}
                 >
                   Afficher l'arbre
                 </Button>
               </CardActions>
             </Card>
-        ))}
+          );
+        })}
       </Box>
 
       {projects.length === 0 && !loading && (
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: 12,
-            px: 3,
-          }}
-        >
+        <Box sx={{ textAlign: 'center', py: 12, px: 3 }}>
           <FolderIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 3 }} />
           <Typography variant="h5" color="text.secondary" gutterBottom>
             Aucun projet trouvé
@@ -501,11 +310,7 @@ const ProjectsPage = () => {
         onClose={() => setShowModal(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-          },
-        }}
+        PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle sx={{ pb: 1 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -528,11 +333,8 @@ const ProjectsPage = () => {
                 onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
                 placeholder="Ex: Système d'authentification"
                 required
-                InputProps={{
-                  startAdornment: <FolderIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
+                InputProps={{ startAdornment: <FolderIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
               />
-
               <Box>
                 <TextField
                   fullWidth
@@ -542,9 +344,7 @@ const ProjectsPage = () => {
                   placeholder="Ex: AUTH"
                   required
                   disabled={!!editingProject}
-                  InputProps={{
-                    startAdornment: <AssignmentIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                  }}
+                  InputProps={{ startAdornment: <AssignmentIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
                 />
                 {editingProject && (
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
@@ -552,7 +352,6 @@ const ProjectsPage = () => {
                   </Typography>
                 )}
               </Box>
-
               <TextField
                 fullWidth
                 label="Description"
@@ -563,7 +362,6 @@ const ProjectsPage = () => {
                 placeholder="Décrivez votre projet..."
                 required
               />
-
               {editingProject && (
                 <>
                   <Divider />
@@ -582,7 +380,12 @@ const ProjectsPage = () => {
             <Button onClick={() => setShowModal(false)} variant="outlined" size="large">
               Annuler
             </Button>
-            <Button type="submit" variant="contained" size="large" startIcon={editingProject ? <EditIcon /> : <AddIcon />}>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              startIcon={editingProject ? <EditIcon /> : <AddIcon />}
+            >
               {editingProject ? 'Mettre à jour' : 'Créer'}
             </Button>
           </DialogActions>

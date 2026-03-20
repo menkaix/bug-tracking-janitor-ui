@@ -1,5 +1,9 @@
 import { apiClient } from './api.service';
 import logger from './logger.service';
+import { API_ENDPOINTS } from '../config/api.config';
+
+const PROJECTS_URL = API_ENDPOINTS.PROJECTS;
+const PROJECT_COMMAND_URL = API_ENDPOINTS.PROJECT_COMMAND;
 
 // Extrait l'ID MongoDB depuis le lien HAL self : ".../projects/507f1f77bcf86cd799439011"
 const extractId = (project) =>
@@ -37,7 +41,7 @@ const projectService = {
       if (filter) params.filter = filter;
 
       logger.debug('Fetching projects', { page, size, search, filter });
-      const response = await apiClient.get('/projects', { params });
+      const response = await apiClient.get(PROJECTS_URL, { params });
       const data = parseHalResponse(response.data, size);
       logger.info('Projects fetched successfully', { count: data.content.length });
       return { success: true, data };
@@ -50,7 +54,7 @@ const projectService = {
   getProjectById: async (id) => {
     try {
       logger.debug('Fetching project by ID', { id });
-      const response = await apiClient.get(`/projects/${id}`);
+      const response = await apiClient.get(`${PROJECTS_URL}/${id}`);
       logger.info('Project fetched successfully', { id });
       return { success: true, data: mapFromBackend(response.data) };
     } catch (error) {
@@ -63,7 +67,7 @@ const projectService = {
     try {
       const payload = mapToBackend(project);
       logger.info('Creating new project', { name: payload.name });
-      const response = await apiClient.post('/projects', payload);
+      const response = await apiClient.post(PROJECTS_URL, payload);
       logger.info('Project created successfully', { id: response.data?.id });
       return { success: true, data: mapFromBackend(response.data) };
     } catch (error) {
@@ -76,7 +80,7 @@ const projectService = {
     try {
       const payload = mapToBackend(project);
       logger.info('Updating project', { id, name: payload.name });
-      const response = await apiClient.put(`/projects/${id}`, payload);
+      const response = await apiClient.put(`${PROJECTS_URL}/${id}`, payload);
       logger.info('Project updated successfully', { id });
       return { success: true, data: mapFromBackend(response.data) };
     } catch (error) {
@@ -88,7 +92,7 @@ const projectService = {
   deleteProject: async (id) => {
     try {
       logger.info('Deleting project', { id });
-      await apiClient.delete(`/projects/${id}`);
+      await apiClient.delete(`${PROJECTS_URL}/${id}`);
       logger.info('Project deleted successfully', { id });
       return { success: true };
     } catch (error) {
@@ -100,7 +104,7 @@ const projectService = {
   getProjectTree: async (projectCode) => {
     try {
       logger.debug('Fetching project tree', { projectCode });
-      const response = await apiClient.get(`/project-command/${projectCode}/tree`);
+      const response = await apiClient.get(`${PROJECT_COMMAND_URL}/${projectCode}/tree`);
       logger.info('Project tree fetched successfully', { projectCode });
       return { success: true, data: response.data };
     } catch (error) {

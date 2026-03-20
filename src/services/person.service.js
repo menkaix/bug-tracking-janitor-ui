@@ -1,7 +1,8 @@
 import { apiClient } from './api.service';
 import logger from './logger.service';
+import { API_ENDPOINTS } from '../config/api.config';
 
-const API_URL = '/person';
+const API_URL = API_ENDPOINTS.PERSONS;
 
 const personService = {
   /**

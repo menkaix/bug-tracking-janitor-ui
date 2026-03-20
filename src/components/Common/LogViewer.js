@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import logger from '../../services/logger.service';
+import { useConfirm } from '../../hooks/useConfirm';
 import './LogViewer.css';
 
 /**
@@ -11,6 +12,7 @@ const LogViewer = ({ onClose }) => {
   const [filter, setFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const confirm = useConfirm();
 
   useEffect(() => {
     loadLogs();
@@ -37,11 +39,15 @@ const LogViewer = ({ onClose }) => {
     })
     .reverse(); // Les plus récents en premier
 
-  const handleClearLogs = () => {
-    if (window.confirm('Êtes-vous sûr de vouloir effacer tous les logs ?')) {
-      logger.clearLogs();
-      loadLogs();
-    }
+  const handleClearLogs = async () => {
+    const ok = await confirm({
+      title: 'Effacer tous les logs ?',
+      description: 'Cette action est irréversible.',
+      confirmLabel: 'Effacer',
+    });
+    if (!ok) return;
+    logger.clearLogs();
+    loadLogs();
   };
 
   const handleExportLogs = () => {

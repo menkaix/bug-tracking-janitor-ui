@@ -17,6 +17,24 @@ export const STORAGE_KEYS = {
 };
 
 /**
+ * Endpoints API — source unique de vérité pour tous les services
+ */
+export const API_ENDPOINTS = {
+  TASKS: '/task',
+  PROJECTS: '/projects',
+  PERSONS: '/person',
+  PROJECT_COMMAND: '/project-command',
+};
+
+/**
+ * Limites de fetch pour éviter les requêtes massives
+ */
+export const FETCH_LIMITS = {
+  DASHBOARD: 2000,
+  PROJECTS_STATUS: 2000,
+};
+
+/**
  * Messages d'erreur
  */
 export const ERROR_MESSAGES = {

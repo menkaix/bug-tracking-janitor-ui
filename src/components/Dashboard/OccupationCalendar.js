@@ -25,6 +25,27 @@ import {
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isWeekend, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, isValid } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+// Fonction pure extraite du composant pour éviter sa recréation à chaque render
+const getTasksForDay = (personTasks, day) => {
+  return personTasks.filter(task => {
+    if (!task.plannedStart) return false;
+    const startDate = new Date(task.plannedStart);
+    if (!isValid(startDate)) return false;
+    const checkDay = new Date(day);
+    checkDay.setHours(0, 0, 0, 0);
+    const taskStart = new Date(startDate);
+    taskStart.setHours(0, 0, 0, 0);
+    if (task.deadLine || task.dueDate) {
+      const endDate = new Date(task.deadLine || task.dueDate);
+      if (isValid(endDate)) {
+        endDate.setHours(23, 59, 59, 999);
+        return isWithinInterval(checkDay, { start: taskStart, end: endDate });
+      }
+    }
+    return isSameDay(checkDay, taskStart);
+  });
+};
+
 const OccupationCalendar = ({ tasks = [], persons = [], onTaskClick }) => {
   const theme = useTheme();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -79,36 +100,6 @@ const OccupationCalendar = ({ tasks = [], persons = [], onTaskClick }) => {
       };
     }).sort((a, b) => (a.firstName || '').localeCompare(b.firstName || ''));
   }, [persons, tasks]);
-
-  // Helper to get tasks for a specific person on a specific day
-  const getTasksForDay = (personTasks, day) => {
-    return personTasks.filter(task => {
-      if (!task.plannedStart) return false;
-
-      const startDate = new Date(task.plannedStart);
-      if (!isValid(startDate)) return false;
-
-      // Ensure start of day comparison
-      const checkDay = new Date(day);
-      checkDay.setHours(0, 0, 0, 0);
-
-      const taskStart = new Date(startDate);
-      taskStart.setHours(0, 0, 0, 0);
-
-      if (task.deadLine || task.dueDate) {
-        const endDateCode = task.deadLine || task.dueDate;
-        const endDate = new Date(endDateCode);
-
-        if (isValid(endDate)) {
-          endDate.setHours(23, 59, 59, 999);
-          return isWithinInterval(checkDay, { start: taskStart, end: endDate });
-        }
-      }
-
-      // If no valid end date, just check start date
-      return isSameDay(checkDay, taskStart);
-    });
-  };
 
   const getTaskStatusColor = (status) => {
     const s = (status || '').toLowerCase();

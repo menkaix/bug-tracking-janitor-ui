@@ -34,21 +34,14 @@ import {
 import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { format } from 'date-fns';
+import { formatDate } from '../../utils/dateUtils';
+import { KANBAN_STATUS_OPTIONS } from '../../models/task.model';
+import { assigneeToArray, resolveAssigneeNames } from '../../utils/assigneeUtils';
 
 /**
  * Composant pour une carte de tâche draggable
  */
-const STATUS_OPTIONS = [
-  { value: '', label: 'Autres' },
-  { value: 'to-study', label: 'À étudier' },
-  { value: 'todo', label: 'À faire' },
-  { value: 'in-progress', label: 'En cours' },
-  { value: 'to-test', label: 'À tester' },
-  { value: 'done', label: 'Terminé' },
-  { value: 'pending', label: 'En attente' },
-  { value: 'canceled', label: 'Annulé' },
-];
+const STATUS_OPTIONS = KANBAN_STATUS_OPTIONS;
 
 const TaskCard = React.memo(({ task, persons, onEdit, onDelete, onStatusChange, isDragging = false }) => {
   const theme = useTheme();
@@ -68,29 +61,7 @@ const TaskCard = React.memo(({ task, persons, onEdit, onDelete, onStatusChange, 
     opacity: isSortableDragging ? 0.5 : 1,
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    try {
-      return format(new Date(dateString), 'dd/MM/yyyy');
-    } catch {
-      return '-';
-    }
-  };
-
-  const assigneeToArray = (assigneeString) => {
-    if (!assigneeString) return [];
-    return assigneeString.split(',').map(e => e.trim()).filter(e => e);
-  };
-
-  const getAssigneesNames = (assignees) => {
-    if (!assignees || assignees.length === 0) return [];
-    return assignees
-      .map(email => {
-        const person = persons.find(p => p.email === email);
-        return person ? person.firstName : email;
-      })
-      .filter(name => name);
-  };
+  const getAssigneesNames = (assignees) => resolveAssigneeNames(assignees, persons);
 
   const assigneesArray = assigneeToArray(task.assignee);
   const assigneeNames = getAssigneesNames(assigneesArray);
