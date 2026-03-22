@@ -1,5 +1,3 @@
-import { assigneeToArray } from './assigneeUtils';
-
 /**
  * Filtres composables pour les tâches.
  * Chaque filtre est une fonction pure (task) => boolean.
@@ -40,7 +38,7 @@ export const byProject = (projectId) => {
 export const byAssignee = (emails) => {
   if (!emails || emails.length === 0) return () => true;
   return (task) => {
-    const taskAssignees = assigneeToArray(task.assignee);
+    const taskAssignees = task.assignees || [];
     return emails.some((email) => taskAssignees.includes(email));
   };
 };

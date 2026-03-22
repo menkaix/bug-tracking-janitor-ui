@@ -213,18 +213,25 @@ const TaskProgress = ({ tasks, size = 'small' }) => {
 /** Select compact pour changer le statut d'une tâche individuelle */
 const TaskStatusSelect = ({ task, onRefresh }) => {
   const [loading, setLoading] = useState(false);
+  const [localStatus, setLocalStatus] = useState(normalizeStatus(task.status) || 'todo');
+
+  useEffect(() => {
+    setLocalStatus(normalizeStatus(task.status) || 'todo');
+  }, [task.status]);
 
   const handleChange = async (e) => {
     e.stopPropagation();
+    const newStatus = e.target.value;
+    setLocalStatus(newStatus); // mise à jour optimiste immédiate
     setLoading(true);
-    await taskService.patchTask(task.id, { status: e.target.value }, task);
+    await taskService.patchTask(task.id, { status: newStatus }, task);
     setLoading(false);
     onRefresh();
   };
 
   return (
     <Select
-      value={normalizeStatus(task.status) || 'todo'}
+      value={localStatus}
       onChange={handleChange}
       size="small"
       variant="standard"
@@ -262,18 +269,14 @@ const BulkStatusMenu = ({ tasks, onRefresh, label }) => {
   return (
     <>
       <Tooltip title={`Appliquer un statut aux ${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`}>
-        <span>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={loading ? <CircularProgress size={12} /> : <BulkEditIcon fontSize="small" />}
-            onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
-            disabled={loading}
-            sx={{ borderRadius: 2, fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
-          >
-            {label || `${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`}
-          </Button>
-        </span>
+        <Chip
+          size="small"
+          variant="outlined"
+          icon={loading ? <CircularProgress size={12} /> : <BulkEditIcon sx={{ fontSize: '0.85rem !important' }} />}
+          label={label || `${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`}
+          onClick={(e) => { e.stopPropagation(); if (!loading) setAnchor(e.currentTarget); }}
+          sx={{ fontSize: '0.72rem', cursor: loading ? 'default' : 'pointer' }}
+        />
       </Tooltip>
       <Menu
         anchorEl={anchor}
@@ -306,7 +309,11 @@ const BulkAssignMenu = ({ tasks, persons, onRefresh }) => {
   const handleAssign = async (email) => {
     setAnchor(null);
     setLoading(true);
-    await Promise.all(tasks.map((t) => taskService.patchTask(t.id, { assignee: email }, t)));
+    await Promise.all(tasks.map((t) => {
+      const current = t.assignees || [];
+      if (current.includes(email)) return Promise.resolve();
+      return taskService.patchTask(t.id, { assignees: [...current, email] }, t);
+    }));
     setLoading(false);
     onRefresh();
   };
@@ -316,19 +323,15 @@ const BulkAssignMenu = ({ tasks, persons, onRefresh }) => {
   return (
     <>
       <Tooltip title={`Affecter les ${tasks.length} tâche${tasks.length > 1 ? 's' : ''} à une personne`}>
-        <span>
-          <Button
-            size="small"
-            variant="outlined"
-            color="secondary"
-            startIcon={loading ? <CircularProgress size={12} /> : <PersonIcon fontSize="small" />}
-            onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
-            disabled={loading}
-            sx={{ borderRadius: 2, fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
-          >
-            Affecter
-          </Button>
-        </span>
+        <Chip
+          size="small"
+          variant="outlined"
+          color="secondary"
+          icon={loading ? <CircularProgress size={12} /> : <PersonIcon sx={{ fontSize: '0.85rem !important' }} />}
+          label="Affecter"
+          onClick={(e) => { e.stopPropagation(); if (!loading) setAnchor(e.currentTarget); }}
+          sx={{ fontSize: '0.72rem', cursor: loading ? 'default' : 'pointer' }}
+        />
       </Tooltip>
       <Menu
         anchorEl={anchor}
@@ -1520,7 +1523,7 @@ const FeatureTreePage = () => {
                 onEditFeature={(f) => setEditFeatureDialog(f)}
                 onCreateTask={(f) => setCreateTaskDialog(f)}
                 onEditTask={(t) => setEditTaskDialog(t)}
-                onRefresh={() => fetchTree(treeData.code)}
+                onRefresh={() => fetchTree(projectCode)}
                 persons={persons}
               />
             ))

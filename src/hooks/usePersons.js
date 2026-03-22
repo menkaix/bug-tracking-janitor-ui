@@ -36,22 +36,43 @@ export const usePersons = () => {
   // ─── Query ──────────────────────────────────────────────────────────────────
 
   const personsQuery = useQuery({
-    queryKey: ['persons', { page: currentPage, size: pageSize, search: debouncedSearch }],
+    queryKey: ['persons', 'all'],
     queryFn: async () => {
-      const result = await personService.getAllPersons(currentPage, pageSize, debouncedSearch);
+      const result = await personService.getAllPersons(0, 1000, '');
       if (!result.success) throw new Error(result.error || 'Erreur lors du chargement des personnes');
-      return result.data;
+      const all = result.data?.content || [];
+      // Déduplication par id côté client (deux collections backend peuvent renvoyer des doublons)
+      return Array.from(new Map(all.map((p) => [p.id, p])).values());
     },
-    placeholderData: keepPreviousData,
+    staleTime: 2 * 60 * 1000,
   });
 
-  const persons = personsQuery.data?.content || [];
+  const allPersons = personsQuery.data || [];
+
+  // Filtre de recherche client-side
+  const filteredPersons = debouncedSearch
+    ? allPersons.filter((p) => {
+        const q = debouncedSearch.toLowerCase();
+        return (
+          (p.firstName || '').toLowerCase().includes(q) ||
+          (p.lastName || '').toLowerCase().includes(q) ||
+          (p.email || '').toLowerCase().includes(q)
+        );
+      })
+    : allPersons;
+
+  // Pagination client-side
+  const totalElements = filteredPersons.length;
+  const totalPages = Math.max(1, Math.ceil(totalElements / pageSize));
+  const safePage = Math.min(currentPage, totalPages - 1);
+  const persons = filteredPersons.slice(safePage * pageSize, (safePage + 1) * pageSize);
+
   const loading = personsQuery.isLoading;
   const error = personsQuery.isError ? (personsQuery.error?.message || 'Erreur') : null;
   const pagination = {
-    currentPage: personsQuery.data?.number ?? personsQuery.data?.currentPage ?? currentPage,
-    totalPages: personsQuery.data?.totalPages ?? 0,
-    totalElements: personsQuery.data?.totalElements ?? 0,
+    currentPage: safePage,
+    totalPages,
+    totalElements,
     size: pageSize,
   };
 

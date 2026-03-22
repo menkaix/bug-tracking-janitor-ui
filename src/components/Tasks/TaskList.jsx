@@ -27,7 +27,7 @@ import {
   Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { TASK_STATUS_OPTIONS, getTaskStatusInfo } from '../../models/task.model';
-import { assigneeToArray, resolveAssigneeNames } from '../../utils/assigneeUtils';
+import { resolveAssigneeNames } from '../../utils/assigneeUtils';
 import { formatDate } from '../../utils/dateUtils';
 
 /**
@@ -80,7 +80,7 @@ const TaskList = ({
           {tasks.map((task) => {
             const itemSelected = isSelected(task.id);
             const statusInfo = getTaskStatusInfo(task.status);
-            const assigneesArr = assigneeToArray(task.assignee);
+            const assigneesArr = task.assignees || [];
             const assigneeNames = resolveAssigneeNames(assigneesArr, persons);
 
             return (
@@ -143,7 +143,7 @@ const TaskList = ({
                         />
                       );
                     })}
-                    {(!task.assignee || task.assignee.length === 0) && (
+                    {(!task.assignees || task.assignees.length === 0) && (
                       <Typography variant="caption" color="text.secondary">Non assigné</Typography>
                     )}
                     <FormControl size="small" sx={{ minWidth: 150 }}>

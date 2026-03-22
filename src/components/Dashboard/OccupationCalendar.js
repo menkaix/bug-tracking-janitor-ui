@@ -89,9 +89,8 @@ const OccupationCalendar = ({ tasks = [], persons = [], onTaskClick }) => {
   const rows = useMemo(() => {
     return persons.map(person => {
       const personTasks = tasks.filter(task => {
-        if (!task.assignee) return false;
-        const assignees = task.assignee.toLowerCase().split(',').map(s => s.trim());
-        return assignees.includes(person.email?.toLowerCase());
+        if (!task.assignees || task.assignees.length === 0) return false;
+        return task.assignees.map(s => s.toLowerCase()).includes(person.email?.toLowerCase());
       });
 
       return {

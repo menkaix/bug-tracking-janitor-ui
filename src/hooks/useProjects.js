@@ -7,7 +7,6 @@ import projectService from '../services/project.service';
 import taskService from '../services/task.service';
 import backlogService from '../services/backlog.service';
 import { calculateProjectStatus } from '../utils/projectStatus';
-import { FETCH_LIMITS } from '../config/api.config';
 
 const EMPTY_PROJECT_FORM = {
   projectName: '',
@@ -56,18 +55,25 @@ export const useProjects = () => {
     placeholderData: keepPreviousData,
   });
 
-  // Tâches pour le calcul de statut des projets (cache partagé avec le Dashboard)
+  const projects = projectsQuery.data?.content || [];
+
+  // Tâches par projet — une requête dédiée par projet visible, sans limite de pagination
   const tasksQuery = useQuery({
-    queryKey: ['tasks', 'allForStatus', FETCH_LIMITS.PROJECTS_STATUS],
+    queryKey: ['tasks', 'byProjects', projects.map((p) => p.id).sort().join(',')],
     queryFn: async () => {
-      const result = await taskService.getAllTasks(0, FETCH_LIMITS.PROJECTS_STATUS);
-      return result.success ? (result.data.content || []) : [];
+      if (!projects.length) return {};
+      const results = await Promise.all(projects.map((p) => taskService.getTasksByProjectRef(p.id)));
+      const tasksByProject = {};
+      projects.forEach((p, i) => {
+        tasksByProject[p.id] = results[i].success ? (results[i].data || []) : [];
+      });
+      return tasksByProject;
     },
+    enabled: projects.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 
-  const projects = projectsQuery.data?.content || [];
-  const tasks = tasksQuery.data || [];
+  const tasks = Object.values(tasksQuery.data || {}).flat();
   const loading = projectsQuery.isLoading || projectsQuery.isFetching;
   const error = projectsQuery.isError ? (projectsQuery.error?.message || 'Erreur') : '';
   const pagination = {
@@ -168,10 +174,10 @@ export const useProjects = () => {
 
   const getCalculatedStatus = useCallback(
     (projectId) => {
-      const projectTasks = tasks.filter((t) => t.projectId === projectId);
+      const projectTasks = tasksQuery.data?.[projectId] || [];
       return calculateProjectStatus(projectTasks);
     },
-    [tasks]
+    [tasksQuery.data]
   );
 
   return {
