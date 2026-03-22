@@ -16,6 +16,7 @@ import TasksPage from './pages/TasksPage';
 import ProjectsPage from './pages/ProjectsPage';
 import PersonsPage from './pages/PersonsPage';
 import FeatureTreePage from './pages/FeatureTreePage';
+import NetworkActivityOverlay from './components/Common/NetworkActivityOverlay';
 import theme from './theme/theme';
 import './App.css';
 
@@ -154,6 +155,7 @@ function App() {
                 </Routes>
               </Box>
             </Box>
+            <NetworkActivityOverlay />
           </Router>
           </ConfirmProvider>
         </ThemeProvider>

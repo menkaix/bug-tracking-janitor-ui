@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_CONFIG, STORAGE_KEYS, ERROR_MESSAGES } from '../config/api.config';
 import logger from './logger.service';
+import { networkActivityStore } from './networkActivity';
 
 /**
  * Instance Axios configurée avec l'API key
@@ -34,6 +35,9 @@ const createApiInstance = () => {
       // Log de la requête
       logger.logRequest(config.method.toUpperCase(), config.url, config.data);
 
+      // Suivi activité réseau
+      config._activityId = networkActivityStore.start(config.method.toUpperCase(), config.url);
+
       return config;
     },
     (error) => {
@@ -52,6 +56,12 @@ const createApiInstance = () => {
         response.status,
         response.data
       );
+
+      // Suivi activité réseau
+      if (response.config._activityId != null) {
+        networkActivityStore.finish(response.config._activityId, 'success');
+      }
+
       return response;
     },
     (error) => {
@@ -59,6 +69,11 @@ const createApiInstance = () => {
       const method = error.config?.method?.toUpperCase() || 'UNKNOWN';
       const url = error.config?.url || 'UNKNOWN';
       const status = error.response?.status || 'NO_RESPONSE';
+
+      // Suivi activité réseau
+      if (error.config?._activityId != null) {
+        networkActivityStore.finish(error.config._activityId, 'error');
+      }
 
       logger.logResponse(method, url, status, error.response?.data);
 

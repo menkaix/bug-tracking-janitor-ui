@@ -55,6 +55,7 @@ import {
   Close as CloseIcon,
   Edit as EditIcon,
   EditNote as BulkEditIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import projectService from '../services/project.service';
 import backlogService from '../services/backlog.service';
@@ -595,6 +596,7 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
           {actorTasks.length > 0 && <BulkAssignMenu tasks={actorTasks} persons={persons} onRefresh={onRefresh} />}
           <Box sx={{ flexGrow: 1 }} />
           <Button
+            component="span"
             size="small"
             startIcon={<AddIcon />}
             variant="outlined"
@@ -1217,6 +1219,7 @@ const FeatureTreePage = () => {
   const [featureTypes, setFeatureTypes] = useState([]);
   const [featureTypesLoading, setFeatureTypesLoading] = useState(true);
   const [persons, setPersons] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Dialog state — création
   const [actorDialog, setActorDialog] = useState(false);
@@ -1296,6 +1299,18 @@ const FeatureTreePage = () => {
 
   const handleManualSearch = () => {
     if (projectCode.trim()) fetchTree(projectCode.trim().toUpperCase());
+  };
+
+  const handleRefreshTree = async () => {
+    if (!projectCode || refreshing) return;
+    setRefreshing(true);
+    const result = await projectService.getProjectTree(projectCode);
+    if (result.success) {
+      setTreeData(result.data);
+    } else {
+      enqueueSnackbar(`Erreur lors du rafraîchissement : ${result.error}`, { variant: 'error' });
+    }
+    setRefreshing(false);
   };
 
   // ── Handlers création ──────────────────────────────────────────────────────
@@ -1498,14 +1513,29 @@ const FeatureTreePage = () => {
                 )}
               </Stack>
               <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setActorDialog(true)}
-                sx={{ borderRadius: 2, flexShrink: 0 }}
-              >
-                Acteur
-              </Button>
+              <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                <Tooltip title="Récupérer la dernière version depuis le serveur">
+                  <span>
+                    <Button
+                      variant="outlined"
+                      startIcon={refreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
+                      onClick={handleRefreshTree}
+                      disabled={refreshing}
+                      sx={{ borderRadius: 2 }}
+                    >
+                      Rafraîchir
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setActorDialog(true)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  Acteur
+                </Button>
+              </Stack>
             </Stack>
           </Paper>
 
