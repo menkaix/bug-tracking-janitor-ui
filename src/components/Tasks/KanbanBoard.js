@@ -36,7 +36,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { formatDate } from '../../utils/dateUtils';
 import { KANBAN_STATUS_OPTIONS } from '../../models/task.model';
-import { assigneeToArray, resolveAssigneeNames } from '../../utils/assigneeUtils';
+import { resolveAssigneeNames } from '../../utils/assigneeUtils';
 
 /**
  * Composant pour une carte de tâche draggable
@@ -63,7 +63,7 @@ const TaskCard = React.memo(({ task, persons, onEdit, onDelete, onStatusChange, 
 
   const getAssigneesNames = (assignees) => resolveAssigneeNames(assignees, persons);
 
-  const assigneesArray = assigneeToArray(task.assignee);
+  const assigneesArray = task.assignees || [];
   const assigneeNames = getAssigneesNames(assigneesArray);
 
   return (

@@ -8,7 +8,7 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import { Add as AddIcon, ViewList as ViewListIcon, ViewKanban as ViewKanbanIcon } from '@mui/icons-material';
+import { Add as AddIcon, ViewList as ViewListIcon, ViewKanban as ViewKanbanIcon, Folder as FolderIcon } from '@mui/icons-material';
 import { useTasks } from '../hooks/useTasks';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import TaskListSkeleton, { KanbanBoardSkeleton } from '../components/Common/TaskSkeleton';
@@ -30,8 +30,9 @@ const TasksPage = () => {
   const {
     tasks, projects, persons, pagination,
     isLoading, isFetching, isError, tasksError,
+    noProjectSelected,
     searchTerm, setSearchTerm,
-    projectFilter, handleProjectFilterChange,
+    projectFilter, toggleProjectFilter, clearProjectFilter,
     statusFilter, toggleStatusFilter, clearStatusFilter,
     assigneeFilter, toggleAssigneeFilter, clearAssigneeFilter,
     viewMode, setViewMode,
@@ -92,7 +93,8 @@ const TasksPage = () => {
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         projectFilter={projectFilter}
-        onProjectFilterChange={handleProjectFilterChange}
+        onToggleProject={toggleProjectFilter}
+        onClearProject={clearProjectFilter}
         statusFilter={statusFilter}
         onToggleStatus={toggleStatusFilter}
         onClearStatus={clearStatusFilter}
@@ -105,8 +107,17 @@ const TasksPage = () => {
 
       {isFetching && <Box sx={{ height: 3, width: '100%', background: 'linear-gradient(90deg, transparent, primary.main, transparent)' }} />}
 
+      {/* État vide — aucun projet sélectionné */}
+      {noProjectSelected && (
+        <Paper sx={{ p: 8, textAlign: 'center', borderRadius: 3, boxShadow: 2 }}>
+          <FolderIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>Sélectionnez au moins un projet</Typography>
+          <Typography variant="body2" color="text.disabled">Les tâches sont chargées projet par projet pour éviter les téléchargements massifs.</Typography>
+        </Paper>
+      )}
+
       {/* Vue Liste */}
-      {viewMode === 0 && (
+      {!noProjectSelected && viewMode === 0 && (
         <>
           <TaskBulkActions
             selectedCount={selectedTasks.length}
@@ -146,7 +157,7 @@ const TasksPage = () => {
       )}
 
       {/* Vue Kanban */}
-      {viewMode === 1 && (
+      {!noProjectSelected && viewMode === 1 && (
         <KanbanBoard
           tasks={tasks}
           persons={persons}

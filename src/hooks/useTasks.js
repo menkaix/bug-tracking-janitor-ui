@@ -7,7 +7,6 @@ import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import backlogService from '../services/backlog.service';
 import { EMPTY_TASK_FORM } from '../models/task.model';
-import { assigneeToArray, arrayToAssignee } from '../utils/assigneeUtils';
 import { toDateInputValue, fromDateInputValue } from '../utils/dateUtils';
 import { useConfirm } from './useConfirm';
 
@@ -34,96 +33,58 @@ const savePreferences = (prefs) => {
 
 // ─── Fetcher React Query (fonction pure, pas de hooks) ───────────────────────
 
-export const fetchTasksData = async ({ page, size, statusFilter, projectFilter, assigneeFilter, searchTerm, viewMode }) => {
-  const isKanbanMode = viewMode === 1;
-  const pageSize = isKanbanMode ? 1000 : size;
-  const currentPage = isKanbanMode ? 0 : page;
-
+const applyClientFilters = (tasks, { searchTerm, statusFilter, assigneeFilter }) => {
+  let filtered = tasks;
+  if (searchTerm) {
+    const lower = searchTerm.toLowerCase();
+    filtered = filtered.filter(
+      (t) =>
+        (t.title || '').toLowerCase().includes(lower) ||
+        (t.description || '').toLowerCase().includes(lower) ||
+        (t.trackingReference || '').toLowerCase().includes(lower)
+    );
+  }
   if (statusFilter.length > 0) {
     const hasNoStatus = statusFilter.includes('no-status');
     const realStatuses = statusFilter.filter((s) => s !== 'no-status');
-    const results = await Promise.all(
-      realStatuses.map((status) => taskService.getAllTasks(0, 1000, searchTerm, `status:${status}`))
+    filtered = filtered.filter(
+      (t) => (hasNoStatus && (!t.status || t.status === '')) || realStatuses.includes(t.status)
     );
-    if (!results.every((r) => r.success)) throw new Error('Impossible de charger les tâches');
-
-    let allTasks = results.flatMap((r) => r.data.content || []);
-
-    if (hasNoStatus) {
-      const allResult = await taskService.getAllTasks(0, 1000, searchTerm, '');
-      if (allResult.success) {
-        const noStatus = (allResult.data.content || []).filter((t) => !t.status || t.status === '');
-        allTasks = [...allTasks, ...noStatus];
-      }
-    }
-
-    let unique = Array.from(new Map(allTasks.map((t) => [t.id, t])).values());
-    if (projectFilter) {
-      unique =
-        projectFilter === 'no-project'
-          ? unique.filter((t) => !t.projectId || t.projectId === '')
-          : unique.filter((t) => t.projectId === projectFilter);
-    }
-    if (assigneeFilter.length > 0) {
-      unique = unique.filter((t) => assigneeFilter.some((e) => assigneeToArray(t.assignee).includes(e)));
-    }
-
-    const total = unique.length;
-    if (isKanbanMode) return { tasks: unique, pagination: { currentPage: 0, totalPages: 1, totalElements: total, size: total } };
-    const totalPages = Math.ceil(total / pageSize);
-    return {
-      tasks: unique.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
-      pagination: { currentPage, totalPages, totalElements: total, size: pageSize },
-    };
   }
-
-  if (projectFilter === 'no-project') {
-    const result = await taskService.getAllTasks(0, 1000, searchTerm, '');
-    if (!result.success) throw new Error(result.error || 'Impossible de charger les tâches');
-    let tasks = (result.data.content || []).filter((t) => !t.projectId || t.projectId === '');
-    if (assigneeFilter.length > 0) {
-      tasks = tasks.filter((t) => assigneeFilter.some((e) => assigneeToArray(t.assignee).includes(e)));
-    }
-    const total = tasks.length;
-    if (isKanbanMode) return { tasks, pagination: { currentPage: 0, totalPages: 1, totalElements: total, size: total } };
-    const totalPages = Math.ceil(total / pageSize);
-    return {
-      tasks: tasks.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
-      pagination: { currentPage, totalPages, totalElements: total, size: pageSize },
-    };
-  }
-
-  const filter = projectFilter ? `projectId:${projectFilter}` : '';
-
   if (assigneeFilter.length > 0) {
-    const result = await taskService.getAllTasks(0, 1000, searchTerm, filter);
-    if (!result.success) throw new Error(result.error || 'Impossible de charger les tâches');
-    const tasks = (result.data.content || []).filter((t) =>
-      assigneeFilter.some((e) => assigneeToArray(t.assignee).includes(e))
-    );
-    const total = tasks.length;
-    if (isKanbanMode) return { tasks, pagination: { currentPage: 0, totalPages: 1, totalElements: total, size: total } };
-    const totalPages = Math.ceil(total / pageSize);
-    return {
-      tasks: tasks.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
-      pagination: { currentPage, totalPages, totalElements: total, size: pageSize },
-    };
+    filtered = filtered.filter((t) => assigneeFilter.some((e) => (t.assignees || []).includes(e)));
+  }
+  return filtered;
+};
+
+const deduplicateTasks = (tasks) => Array.from(new Map(tasks.map((t) => [t.id, t])).values());
+
+const paginateClientSide = (tasks, { currentPage, pageSize, isKanbanMode }) => {
+  const total = tasks.length;
+  if (isKanbanMode) return { tasks, pagination: { currentPage: 0, totalPages: 1, totalElements: total, size: total } };
+  const totalPages = Math.ceil(total / pageSize);
+  return {
+    tasks: tasks.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
+    pagination: { currentPage, totalPages, totalElements: total, size: pageSize },
+  };
+};
+
+export const fetchTasksData = async ({ page, size, statusFilter, projectFilter, assigneeFilter, searchTerm, viewMode }) => {
+  const isKanbanMode = viewMode === 1;
+  const currentPage = isKanbanMode ? 0 : page;
+
+  // Aucun projet sélectionné → liste vide
+  if (!projectFilter || projectFilter.length === 0) {
+    return { tasks: [], pagination: { currentPage: 0, totalPages: 0, totalElements: 0, size }, noProjectSelected: true };
   }
 
-  const result = await taskService.getAllTasks(currentPage, pageSize, searchTerm, filter);
-  if (!result.success) throw new Error(result.error || 'Impossible de charger les tâches');
-  const data = result.data;
-  const tasks = data.content || [];
-  if (isKanbanMode) return { tasks, pagination: { currentPage: 0, totalPages: 1, totalElements: tasks.length, size: tasks.length } };
-  return {
-    tasks,
-    pagination: {
-      currentPage: data.number ?? data.currentPage ?? currentPage,
-      totalPages: data.totalPages ?? 0,
-      totalElements: data.totalElements ?? 0,
-      size: data.size ?? pageSize,
-    },
-  };
+  // Fetch par projet(s) en parallèle via l'endpoint dédié
+  const results = await Promise.all(projectFilter.map((ref) => taskService.getTasksByProjectRef(ref)));
+  if (!results.every((r) => r.success)) throw new Error('Impossible de charger les tâches');
+
+  const allTasks = deduplicateTasks(results.flatMap((r) => r.data));
+  const filtered = applyClientFilters(allTasks, { searchTerm, statusFilter, assigneeFilter });
+  return paginateClientSide(filtered, { currentPage, pageSize: isKanbanMode ? filtered.length : size, isKanbanMode });
 };
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
@@ -142,7 +103,12 @@ export const useTasks = () => {
 
   // ── Filtres ──
   const [searchTerm, setSearchTerm] = useState(saved?.searchTerm || '');
-  const [projectFilter, setProjectFilter] = useState(searchParams.get('projectId') || saved?.projectFilter || '');
+  const [projectFilter, setProjectFilter] = useState(() => {
+    const param = searchParams.get('projectId');
+    if (param) return param.split(',').map((s) => s.trim()).filter(Boolean);
+    const savedVal = saved?.projectFilter;
+    return Array.isArray(savedVal) ? savedVal : [];
+  });
   const [statusFilter, setStatusFilter] = useState(() => {
     const param = searchParams.get('status');
     if (param) return param.split(',').map((s) => s.trim()).filter(Boolean);
@@ -328,9 +294,9 @@ export const useTasks = () => {
         ids.map((id) => {
           const task = currentTasks.find((t) => t.id === id);
           if (task) {
-            const current = assigneeToArray(task.assignee);
+            const current = task.assignees || [];
             if (!current.includes(email)) {
-              return taskService.updateTask(id, { ...task, assignee: arrayToAssignee([...current, email]) });
+              return taskService.updateTask(id, { ...task, assignees: [...current, email] });
             }
           }
         })
@@ -354,10 +320,10 @@ export const useTasks = () => {
 
   // ── URL sync ─────────────────────────────────────────────────────────────────
 
-  const updateURLWithFilters = (statuses, project, assignees) => {
+  const updateURLWithFilters = (statuses, projects, assignees) => {
     const params = {};
     if (statuses.length > 0) params.status = statuses.join(',');
-    if (project) params.projectId = project;
+    if (projects?.length > 0) params.projectId = projects.join(',');
     if (assignees?.length > 0) params.assignee = assignees.join(',');
     setSearchParams(params);
   };
@@ -390,9 +356,17 @@ export const useTasks = () => {
     updateURLWithFilters(statusFilter, projectFilter, []);
   };
 
-  const handleProjectFilterChange = (newProjectId) => {
-    setProjectFilter(newProjectId);
-    updateURLWithFilters(statusFilter, newProjectId, assigneeFilter);
+  const toggleProjectFilter = (projectId) => {
+    setProjectFilter((prev) => {
+      const next = prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId];
+      updateURLWithFilters(statusFilter, next, assigneeFilter);
+      return next;
+    });
+  };
+
+  const clearProjectFilter = () => {
+    setProjectFilter([]);
+    updateURLWithFilters(statusFilter, [], assigneeFilter);
   };
 
   // ── Pagination ───────────────────────────────────────────────────────────────
@@ -446,13 +420,13 @@ export const useTasks = () => {
 
   const handleAddAssignee = (taskId, email) => {
     const task = tasks.find((t) => t.id === taskId);
-    const current = assigneeToArray(task.assignee);
+    const current = task.assignees || [];
     if (current.includes(email)) return;
-    const newStr = arrayToAssignee([...current, email]);
+    const newAssignees = [...current, email];
     inlineEditMutation.mutate({
       taskId,
-      fullTask: { ...task, assignee: newStr },
-      partialUpdate: { assignee: newStr },
+      fullTask: { ...task, assignees: newAssignees },
+      partialUpdate: { assignees: newAssignees },
       errorMessage: "Erreur lors de l'assignation",
       currentQueryKey: ['tasks', taskQueryParams],
     });
@@ -460,11 +434,11 @@ export const useTasks = () => {
 
   const handleRemoveAssignee = (taskId, email) => {
     const task = tasks.find((t) => t.id === taskId);
-    const newStr = arrayToAssignee(assigneeToArray(task.assignee).filter((e) => e !== email));
+    const newAssignees = (task.assignees || []).filter((e) => e !== email);
     inlineEditMutation.mutate({
       taskId,
-      fullTask: { ...task, assignee: newStr },
-      partialUpdate: { assignee: newStr },
+      fullTask: { ...task, assignees: newAssignees },
+      partialUpdate: { assignees: newAssignees },
       errorMessage: 'Erreur lors de la désassignation',
       currentQueryKey: ['tasks', taskQueryParams],
     });
@@ -488,7 +462,7 @@ export const useTasks = () => {
       trackingReference: task.trackingReference || '',
       plannedStart: toDateInputValue(task.plannedStart),
       deadLine: toDateInputValue(task.deadLine),
-      assignees: assigneeToArray(task.assignee),
+      assignees: task.assignees || [],
     });
     setShowModal(true);
     const result = await backlogService.getEntity('tasks', task.id);
@@ -509,10 +483,8 @@ export const useTasks = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const { assignees, ...rest } = formData;
     const taskData = {
-      ...rest,
-      assignee: arrayToAssignee(assignees),
+      ...formData,
       plannedStart: fromDateInputValue(formData.plannedStart),
       deadLine: fromDateInputValue(formData.deadLine),
     };
@@ -575,9 +547,10 @@ export const useTasks = () => {
 
     // Filters state
     searchTerm, setSearchTerm,
-    projectFilter, handleProjectFilterChange,
+    projectFilter, toggleProjectFilter, clearProjectFilter,
     statusFilter, toggleStatusFilter, clearStatusFilter,
     assigneeFilter, toggleAssigneeFilter, clearAssigneeFilter,
+    noProjectSelected: projectFilter.length === 0,
 
     // View & pagination
     viewMode, setViewMode,

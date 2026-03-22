@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import {
   Box,
   Card,
@@ -10,12 +11,14 @@ import {
   Tooltip,
   useTheme,
   Paper,
+  CircularProgress,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
   Assignment as AssignmentIcon,
   SentimentDissatisfied as EmptyIcon,
 } from '@mui/icons-material';
+import taskService from '../../services/task.service';
 
 const STATUS_META = {
   'todo':        { label: 'À faire',           color: 'secondary' },
@@ -47,37 +50,52 @@ const getInitials = (person) => {
   return (first + last).toUpperCase() || '?';
 };
 
-const OccupationMap = ({ tasks = [], persons = [], projects = [], onTaskClick }) => {
+const OccupationMap = ({ persons = [], projects = [], onTaskClick }) => {
   const theme = useTheme();
 
   const projectCodeMap = useMemo(() =>
     Object.fromEntries(projects.map(p => [p.id, p.projectCode || p.code || ''])),
   [projects]);
 
+  // Récupère les tâches de chaque personne via l'endpoint dédié (sans limite de pagination)
+  const taskQueries = useQueries({
+    queries: persons.map(person => ({
+      queryKey: ['tasks', 'by-assignee', person.email],
+      queryFn: () => taskService.getTasksByAssignee(person.email),
+      enabled: !!person.email,
+      staleTime: 5 * 60 * 1000,
+      select: (result) => result.success ? (result.data || []) : [],
+    })),
+  });
+
+  const isLoading = taskQueries.some(q => q.isLoading || q.isFetching);
+
   const rows = useMemo(() => {
     return persons
-      .map(person => {
-        const personTasks = tasks.filter(task => {
-          if (!task.assignee) return false;
-          const assignees = task.assignee.toLowerCase().split(',').map(s => s.trim());
-          return assignees.includes(person.email?.toLowerCase());
-        });
-
+      .map((person, i) => {
+        const personTasks = taskQueries[i]?.data || [];
         const activeTasks = personTasks
           .filter(t => ACTIVE_STATUSES.has((t.status || '').toLowerCase()))
           .sort(sortByStatus);
-
         return { ...person, activeTasks, totalTasks: personTasks.length };
       })
       .sort((a, b) => b.activeTasks.length - a.activeTasks.length);
-  }, [persons, tasks]);
+  }, [persons, taskQueries]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (rows.length === 0) {
+  if (persons.length === 0) {
     return (
       <Paper elevation={0} variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
         <EmptyIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
         <Typography color="text.secondary">Aucune personne trouvée</Typography>
       </Paper>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+        <CircularProgress />
+      </Box>
     );
   }
 

@@ -132,7 +132,7 @@ const calculateProjectKPIs = (tasks, projects) => {
     });
     const assignedPersonsSet = new Set();
     pt.forEach(t => {
-      if (t.assignee) t.assignee.split(',').map(e => e.trim().toLowerCase()).filter(e => e).forEach(e => assignedPersonsSet.add(e));
+      if (t.assignees) (t.assignees).map(e => e.toLowerCase()).forEach(e => assignedPersonsSet.add(e));
     });
     return {
       id: project.id, name: project.projectName || 'Sans nom', code: project.projectCode || '',
@@ -169,8 +169,8 @@ const calculatePersonKPIs = (tasks, persons) => {
   let totalTasksAssigned = 0, completedTasksByPersons = 0, inProgressTasksByPersons = 0;
   let todoTasksByPersons = 0, pendingTasksByPersons = 0, todoEstimateByPersons = 0, pendingEstimateByPersons = 0;
   tasks.forEach(t => {
-    if (!t.assignee) return;
-    t.assignee.split(',').map(e => e.trim().toLowerCase()).filter(e => e).forEach(email => {
+    if (!t.assignees || t.assignees.length === 0) return;
+    (t.assignees).map(e => e.toLowerCase()).forEach(email => {
       const person = personsByEmail[email];
       if (!person || !tasksByPerson[person.id]) return;
       tasksByPerson[person.id].total++;
@@ -338,17 +338,6 @@ const Dashboard = () => {
   if (isLoading) return <DashboardSkeleton />;
   if (isError) return <ErrorMessage message="Impossible de charger les données du tableau de bord" onRetry={refetch} />;
 
-  // Form Helpers
-  const assigneeToArray = (assigneeString) => {
-    if (!assigneeString) return [];
-    return assigneeString.split(',').map(e => e.trim()).filter(e => e);
-  };
-
-  const arrayToAssignee = (assigneesArray) => {
-    if (!assigneesArray || assigneesArray.length === 0) return '';
-    return assigneesArray.join(',');
-  };
-
   const handleTaskClick = (task) => {
     setEditingTask(task);
     setFormData({
@@ -360,7 +349,7 @@ const Dashboard = () => {
       trackingReference: task.trackingReference || '',
       plannedStart: task.plannedStart ? task.plannedStart.split('T')[0] : '',
       deadLine: task.deadLine ? task.deadLine.split('T')[0] : '', // Use deadLine directly as in TasksPage
-      assignees: assigneeToArray(task.assignee),
+      assignees: task.assignees || [],
     });
     setShowModal(true);
   };
@@ -378,10 +367,8 @@ const Dashboard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const { assignees, ...restFormData } = formData;
     const taskData = {
-      ...restFormData,
-      assignee: arrayToAssignee(assignees),
+      ...formData,
       plannedStart: formData.plannedStart ? new Date(formData.plannedStart).toISOString() : null,
       deadLine: formData.deadLine ? new Date(formData.deadLine).toISOString() : null,
     };
@@ -1084,7 +1071,7 @@ const Dashboard = () => {
             <OccupationCalendar tasks={allTasks} persons={allPersons} onTaskClick={handleTaskClick} />
           )}
           {occupationSubTab === 1 && (
-            <OccupationMap tasks={allTasks} persons={allPersons} projects={allProjects} onTaskClick={handleTaskClick} />
+            <OccupationMap persons={allPersons} projects={allProjects} onTaskClick={handleTaskClick} />
           )}
         </Box>
       )}

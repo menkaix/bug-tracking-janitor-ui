@@ -3,7 +3,8 @@
  */
 export const API_CONFIG = {
   BASE_URL: process.env.REACT_APP_API_URL || 'https://api-backlog-clnwfd9w.ew.gateway.dev',
-  TIMEOUT: 30000,
+  TIMEOUT: 60000,
+  DEFAULT_API_KEY: process.env.REACT_APP_DEFAULT_API_KEY || '',
   HEADERS: {
     'Content-Type': 'application/json',
   },

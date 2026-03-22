@@ -3,10 +3,7 @@ import {
   Box,
   Paper,
   TextField,
-  Select,
   MenuItem,
-  FormControl,
-  InputLabel,
   Button,
   Menu,
   Checkbox,
@@ -22,7 +19,7 @@ import {
   FilterList as FilterListIcon,
   Person as PersonIcon,
   Close as CloseIcon,
-  Cancel as CancelIcon,
+  Folder as FolderIcon,
 } from '@mui/icons-material';
 import { TASK_STATUS_OPTIONS } from '../../models/task.model';
 
@@ -32,13 +29,14 @@ import { TASK_STATUS_OPTIONS } from '../../models/task.model';
  */
 const TaskFilters = ({
   searchTerm, onSearchChange,
-  projectFilter, onProjectFilterChange,
+  projectFilter, onToggleProject, onClearProject,
   statusFilter, onToggleStatus, onClearStatus,
   assigneeFilter, onToggleAssignee, onClearAssignee,
   projects,
   persons,
 }) => {
   const theme = useTheme();
+  const [projectAnchorEl, setProjectAnchorEl] = React.useState(null);
   const [statusAnchorEl, setStatusAnchorEl] = React.useState(null);
   const [assigneeAnchorEl, setAssigneeAnchorEl] = React.useState(null);
 
@@ -78,31 +76,54 @@ const TaskFilters = ({
         {/* Filtres projet + statut + assigné */}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
           {/* Filtre Projet */}
-          <FormControl sx={{ flex: { xs: '1 1 100%', sm: '1 1 33%' } }}>
-            <InputLabel>Projet</InputLabel>
-            <Select
-              value={projectFilter}
-              onChange={(e) => onProjectFilterChange(e.target.value)}
-              label="Projet"
-              sx={{ borderRadius: 2, backgroundColor: 'background.paper' }}
+          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 33%' } }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<FolderIcon />}
+              endIcon={projectFilter.length > 0 && (
+                <Chip label={projectFilter.length} size="small" color="primary" sx={{ height: 20, minWidth: 20, '& .MuiChip-label': { px: 0.75 } }} />
+              )}
+              onClick={(e) => setProjectAnchorEl(e.currentTarget)}
+              sx={{
+                height: 56, borderRadius: 2, justifyContent: 'space-between', px: 2,
+                backgroundColor: 'background.paper',
+                borderColor: projectFilter.length > 0 ? 'primary.main' : 'error.main',
+                borderWidth: 2,
+                fontWeight: projectFilter.length > 0 ? 600 : 400,
+              }}
             >
-              <MenuItem value=""><Typography variant="body2" color="text.secondary">Tous les projets</Typography></MenuItem>
-              <MenuItem value="no-project">
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CancelIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                  <Typography variant="body2" color="text.secondary">Sans projet</Typography>
-                </Stack>
-              </MenuItem>
+              <Box component="span" sx={{ flex: 1, textAlign: 'left' }}>
+                {projectFilter.length === 0
+                  ? 'Sélectionner un projet *'
+                  : projectFilter.length === 1
+                    ? projects.find((p) => p.id === projectFilter[0])?.projectCode || projectFilter[0]
+                    : `${projectFilter.length} projets sélectionnés`}
+              </Box>
+            </Button>
+            <Menu
+              anchorEl={projectAnchorEl}
+              open={Boolean(projectAnchorEl)}
+              onClose={() => setProjectAnchorEl(null)}
+              PaperProps={{ sx: { borderRadius: 2, minWidth: 320, mt: 1, boxShadow: 4 } }}
+            >
+              <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider', backgroundColor: alpha(theme.palette.primary.main, 0.04) }}>
+                <Typography variant="subtitle2" fontWeight={700}>Sélectionner les projets</Typography>
+                {projectFilter.length > 0 && (
+                  <Button size="small" onClick={onClearProject} sx={{ minWidth: 'auto' }}>Effacer</Button>
+                )}
+              </Box>
               {projects.map((project) => (
-                <MenuItem key={project.id} value={project.id}>
+                <MenuItem key={project.id} onClick={() => onToggleProject(project.id)} sx={{ py: 1.5 }}>
+                  <Checkbox checked={projectFilter.includes(project.id)} sx={{ mr: 1 }} />
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Chip label={project.projectCode} size="small" color="primary" variant="outlined" sx={{ fontWeight: 600 }} />
                     <Typography variant="body2">{project.projectName}</Typography>
                   </Stack>
                 </MenuItem>
               ))}
-            </Select>
-          </FormControl>
+            </Menu>
+          </Box>
 
           {/* Filtre Statut */}
           <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 33%' } }}>
@@ -197,22 +218,26 @@ const TaskFilters = ({
         </Stack>
 
         {/* Chips filtres actifs */}
-        {(searchTerm || projectFilter || statusFilter.length > 0 || assigneeFilter.length > 0) && (
+        {(searchTerm || projectFilter.length > 0 || statusFilter.length > 0 || assigneeFilter.length > 0) && (
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
             <Typography variant="caption" color="text.secondary" fontWeight={600}>Filtres actifs :</Typography>
             {searchTerm && (
               <Chip label={`Recherche: "${searchTerm}"`} size="small" onDelete={() => onSearchChange('')} color="primary" variant="outlined" icon={<SearchIcon />} />
             )}
-            {projectFilter && (
-              <Chip
-                label={projectFilter === 'no-project' ? 'Projet: Sans projet' : `Projet: ${projects.find((p) => p.id === projectFilter)?.projectCode || projectFilter}`}
-                size="small"
-                onDelete={() => onProjectFilterChange('')}
-                color="primary"
-                variant="outlined"
-                icon={projectFilter === 'no-project' ? <CancelIcon /> : undefined}
-              />
-            )}
+            {projectFilter.map((id) => {
+              const project = projects.find((p) => p.id === id);
+              return (
+                <Chip
+                  key={id}
+                  label={`Projet: ${project?.projectCode || id}`}
+                  size="small"
+                  onDelete={() => onToggleProject(id)}
+                  color="primary"
+                  variant="outlined"
+                  icon={<FolderIcon />}
+                />
+              );
+            })}
             {statusFilter.map((status) => {
               const info = TASK_STATUS_OPTIONS.find((o) => o.value === status) || { label: status, color: 'default', icon: null };
               return (

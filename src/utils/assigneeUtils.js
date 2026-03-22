@@ -25,10 +25,10 @@ export const arrayToAssignee = (assigneesArray) => {
 };
 
 /**
- * Résout les emails d'assignés en prénoms via la liste de personnes.
+ * Résout les emails d'assignés en noms complets via la liste de personnes.
  * Retourne l'email si la personne n'est pas trouvée.
  * @param {string[]} emails
- * @param {Array<{email: string, firstName: string}>} persons
+ * @param {Array<{email: string, firstName: string, lastName: string}>} persons
  * @returns {string[]}
  */
 export const resolveAssigneeNames = (emails, persons) => {
@@ -36,7 +36,8 @@ export const resolveAssigneeNames = (emails, persons) => {
   return emails
     .map((email) => {
       const person = persons.find((p) => p.email === email);
-      return person ? person.firstName : email;
+      if (!person) return email;
+      return [person.firstName, person.lastName].filter(Boolean).join(' ');
     })
     .filter(Boolean);
 };

@@ -108,6 +108,38 @@ const taskService = {
   },
 
   /**
+   * Récupère toutes les tâches d'un projet (directes + via features, sans limite de pagination)
+   * @param {string} projectRef - Nom, code ou ID MongoDB du projet
+   */
+  getTasksByProjectRef: async (projectRef) => {
+    try {
+      logger.debug('Fetching tasks by project ref', { projectRef });
+      const response = await apiClient.get(`${API_URL}/by-project-ref/${encodeURIComponent(projectRef)}`);
+      logger.info('Tasks by project ref fetched', { projectRef, count: response.data?.length || 0 });
+      return { success: true, data: response.data || [] };
+    } catch (error) {
+      logger.error('Failed to fetch tasks by project ref', { error: error.message, projectRef });
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * Récupère toutes les tâches assignées à une personne
+   * @param {string} email - Email de l'assigné
+   */
+  getTasksByAssignee: async (email) => {
+    try {
+      logger.debug('Fetching tasks by assignee', { email });
+      const response = await apiClient.get(`${API_URL}/by-assignee/${encodeURIComponent(email)}`);
+      logger.info('Tasks by assignee fetched', { email, count: response.data?.length || 0 });
+      return { success: true, data: response.data || [] };
+    } catch (error) {
+      logger.error('Failed to fetch tasks by assignee', { error: error.message, email });
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
    * Supprime une tâche
    * @param {string} id - ID de la tâche
    */
