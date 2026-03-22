@@ -595,6 +595,7 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
           {actorTasks.length > 0 && <BulkAssignMenu tasks={actorTasks} persons={persons} onRefresh={onRefresh} />}
           <Box sx={{ flexGrow: 1 }} />
           <Button
+            component="span"
             size="small"
             startIcon={<AddIcon />}
             variant="outlined"
