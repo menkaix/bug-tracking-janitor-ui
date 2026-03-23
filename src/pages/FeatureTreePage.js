@@ -36,6 +36,7 @@ import {
   Tooltip,
   Menu,
   Avatar,
+  Checkbox,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
@@ -56,6 +57,7 @@ import {
   Edit as EditIcon,
   EditNote as BulkEditIcon,
   Refresh as RefreshIcon,
+  AddLink as LinkIcon,
 } from '@mui/icons-material';
 import projectService from '../services/project.service';
 import backlogService from '../services/backlog.service';
@@ -398,7 +400,7 @@ const TaskList = ({ tasks, onRefresh, onEditTask }) => {
   );
 };
 
-const FeatureItem = ({ feature, onEdit, onCreateTask, onRefresh, persons, onEditTask }) => {
+const FeatureItem = ({ feature, onEdit, onCreateTask, onLinkTasks, onRefresh, persons, onEditTask }) => {
   const theme = useTheme();
   const config = getFeatureConfig(feature.type);
   const [open, setOpen] = useState(false);
@@ -445,6 +447,16 @@ const FeatureItem = ({ feature, onEdit, onCreateTask, onRefresh, persons, onEdit
         )}
         <Button
           size="small"
+          startIcon={<LinkIcon />}
+          variant="outlined"
+          color="info"
+          onClick={(e) => { e.stopPropagation(); onLinkTasks(feature); }}
+          sx={{ borderRadius: 2, fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
+        >
+          Associer
+        </Button>
+        <Button
+          size="small"
           startIcon={<AddIcon />}
           variant="outlined"
           color="success"
@@ -466,7 +478,7 @@ const FeatureItem = ({ feature, onEdit, onCreateTask, onRefresh, persons, onEdit
   );
 };
 
-const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons, onEditTask }) => {
+const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTask, onLinkTasks, onRefresh, persons, onEditTask }) => {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const hasFeatures = story.features && story.features.length > 0;
@@ -554,7 +566,7 @@ const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTa
           {hasFeatures ? (
             <Stack spacing={1}>
               {story.features.map((feature) => (
-                <FeatureItem key={feature.id} feature={feature} onEdit={onEditFeature} onCreateTask={onCreateTask} onRefresh={onRefresh} persons={persons} onEditTask={onEditTask} />
+                <FeatureItem key={feature.id} feature={feature} onEdit={onEditFeature} onCreateTask={onCreateTask} onLinkTasks={onLinkTasks} onRefresh={onRefresh} persons={persons} onEditTask={onEditTask} />
               ))}
             </Stack>
           ) : (
@@ -568,7 +580,7 @@ const StoryItem = ({ story, onAddFeature, onEditStory, onEditFeature, onCreateTa
   );
 };
 
-const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature, onEditStory, onEditFeature, onCreateTask, onRefresh, persons, onEditTask }) => {
+const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeature, onEditStory, onEditFeature, onCreateTask, onLinkTasks, onRefresh, persons, onEditTask }) => {
   const isUser = actor.type === 'USER';
   const actorTasks = tasksFromStories(actor.stories);
   return (
@@ -618,6 +630,7 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
                 onEditStory={onEditStory}
                 onEditFeature={onEditFeature}
                 onCreateTask={onCreateTask}
+                onLinkTasks={onLinkTasks}
                 onRefresh={onRefresh}
                 persons={persons}
                 onEditTask={onEditTask}
@@ -635,6 +648,134 @@ const ActorPanel = ({ actor, projectCode, defaultExpanded, onAddStory, onAddFeat
 };
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
+
+const LinkTasksDialog = ({ open, feature, projectCode, onClose, onLinked }) => {
+  const { enqueueSnackbar } = useSnackbar();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [linking, setLinking] = useState(false);
+
+  useEffect(() => {
+    if (!open || !projectCode) return;
+    setSelected([]);
+    setLoading(true);
+    taskService.getTasksByProjectRef(projectCode).then((result) => {
+      if (result.success) {
+        setTasks((result.data || []).filter((t) =>
+          !t.featureId &&
+          !t.reference &&
+          !t.idReference &&
+          !['done', 'canceled'].includes(normalizeStatus(t.status))
+        ));
+      }
+      setLoading(false);
+    });
+  }, [open, projectCode]);
+
+  const handleToggle = (taskId) => {
+    setSelected((prev) =>
+      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+    );
+  };
+
+  const handleLink = async () => {
+    if (selected.length === 0) return;
+    setLinking(true);
+    const selectedTasks = tasks.filter((t) => selected.includes(t.id));
+    await Promise.all(
+      selectedTasks.map((t) => backlogService.assignTaskToFeature(feature.id, t.id))
+    );
+    setLinking(false);
+    enqueueSnackbar(
+      `${selected.length} tâche${selected.length > 1 ? 's' : ''} associée${selected.length > 1 ? 's' : ''} à "${feature.name}"`,
+      { variant: 'success' }
+    );
+    onLinked();
+  };
+
+  const handleClose = () => {
+    setSelected([]);
+    setTasks([]);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Box>
+            <Typography variant="h6" fontWeight={700}>Associer des tâches</Typography>
+            {feature && (
+              <Typography variant="caption" color="text.secondary">
+                Feature : {feature.name}
+              </Typography>
+            )}
+          </Box>
+          <IconButton onClick={handleClose} size="small"><CloseIcon /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+        ) : tasks.length === 0 ? (
+          <Typography color="text.secondary" align="center" sx={{ py: 3 }}>
+            Aucune tâche sans feature pour ce projet.
+          </Typography>
+        ) : (
+          <List dense disablePadding>
+            {tasks.map((task) => (
+              <ListItem
+                key={task.id}
+                disableGutters
+                sx={{ py: 0.5, cursor: 'pointer', borderRadius: 1, '&:hover': { bgcolor: 'action.hover' }, px: 1 }}
+                onClick={() => handleToggle(task.id)}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  <Checkbox
+                    edge="start"
+                    checked={selected.includes(task.id)}
+                    size="small"
+                    disableRipple
+                    tabIndex={-1}
+                  />
+                </ListItemIcon>
+                <ListItemText
+                  primary={task.title}
+                  secondary={
+                    <Stack direction="row" spacing={0.75} alignItems="center" component="span">
+                      <Box
+                        component="span"
+                        sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: TASK_STATUS_COLOR[normalizeStatus(task.status)] || '#9e9e9e', display: 'inline-block', flexShrink: 0 }}
+                      />
+                      <span>{TASK_STATUS_LABEL[normalizeStatus(task.status)] || task.status}</span>
+                    </Stack>
+                  }
+                  primaryTypographyProps={{ variant: 'body2' }}
+                  secondaryTypographyProps={{ component: 'div', variant: 'caption' }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
+          {selected.length} tâche{selected.length > 1 ? 's' : ''} sélectionnée{selected.length > 1 ? 's' : ''}
+        </Typography>
+        <Button onClick={handleClose} variant="outlined">Annuler</Button>
+        <Button
+          onClick={handleLink}
+          variant="contained"
+          disabled={selected.length === 0 || linking}
+          startIcon={linking ? <CircularProgress size={16} /> : <LinkIcon />}
+        >
+          Associer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 // ─── Dialogs d'édition (AbstractEntity) ──────────────────────────────────────
 
@@ -1226,6 +1367,7 @@ const FeatureTreePage = () => {
   const [storyDialog, setStoryDialog] = useState({ open: false, actor: null });
   const [featureDialog, setFeatureDialog] = useState({ open: false, story: null });
   const [createTaskDialog, setCreateTaskDialog] = useState(null); // feature object or null
+  const [linkTasksDialog, setLinkTasksDialog] = useState(null); // feature object or null
   // Dialog state — édition
   const [editStoryDialog, setEditStoryDialog] = useState(null); // story object or null
   const [editFeatureDialog, setEditFeatureDialog] = useState(null); // feature object or null
@@ -1552,6 +1694,7 @@ const FeatureTreePage = () => {
                 onEditStory={(s) => setEditStoryDialog(s)}
                 onEditFeature={(f) => setEditFeatureDialog(f)}
                 onCreateTask={(f) => setCreateTaskDialog(f)}
+                onLinkTasks={(f) => setLinkTasksDialog(f)}
                 onEditTask={(t) => setEditTaskDialog(t)}
                 onRefresh={() => fetchTree(projectCode)}
                 persons={persons}
@@ -1637,6 +1780,14 @@ const FeatureTreePage = () => {
         onSave={() => { setEditFeatureDialog(null); fetchTree(treeData?.code); }}
         featureTypes={featureTypes}
         featureTypesLoading={featureTypesLoading}
+      />
+
+      <LinkTasksDialog
+        open={Boolean(linkTasksDialog)}
+        feature={linkTasksDialog}
+        projectCode={treeData?.code}
+        onClose={() => setLinkTasksDialog(null)}
+        onLinked={() => { setLinkTasksDialog(null); fetchTree(treeData?.code); }}
       />
     </Container>
   );

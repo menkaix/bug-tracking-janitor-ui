@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Card,
@@ -12,12 +12,27 @@ import {
   useTheme,
   Paper,
   CircularProgress,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Select,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Stack,
+  IconButton,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
   Assignment as AssignmentIcon,
   SentimentDissatisfied as EmptyIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
+import { useSnackbar } from 'notistack';
 import taskService from '../../services/task.service';
 
 const STATUS_META = {
@@ -50,8 +65,108 @@ const getInitials = (person) => {
   return (first + last).toUpperCase() || '?';
 };
 
+const CreatePersonTaskDialog = ({ open, person, projects, onClose, onCreated }) => {
+  const { enqueueSnackbar } = useSnackbar();
+  const [form, setForm] = useState({ title: '', description: '', projectId: '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleClose = () => {
+    setForm({ title: '', description: '', projectId: '' });
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    const result = await taskService.createTask({
+      title: form.title.trim(),
+      description: form.description.trim(),
+      status: 'todo',
+      assignees: [person.email],
+      projectId: form.projectId || undefined,
+    });
+    setSaving(false);
+    if (result.success) {
+      enqueueSnackbar('Tâche créée', { variant: 'success' });
+      onCreated();
+      handleClose();
+    } else {
+      enqueueSnackbar(`Erreur : ${result.error}`, { variant: 'error' });
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Box>
+            <Typography variant="h6" fontWeight={700}>Nouvelle tâche</Typography>
+            {person && (
+              <Typography variant="caption" color="text.secondary">
+                Assignée à {person.firstName} {person.lastName}
+              </Typography>
+            )}
+          </Box>
+          <IconButton onClick={handleClose} size="small"><CloseIcon /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <TextField
+            label="Titre"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+            required
+            fullWidth
+            autoFocus
+            size="small"
+          />
+          <TextField
+            label="Description"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            fullWidth
+            multiline
+            rows={3}
+            size="small"
+          />
+          <FormControl fullWidth size="small">
+            <InputLabel>Projet</InputLabel>
+            <Select
+              value={form.projectId}
+              label="Projet"
+              onChange={(e) => setForm({ ...form, projectId: e.target.value })}
+            >
+              <MenuItem value=""><em>Aucun</em></MenuItem>
+              {projects.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.projectCode || p.code} — {p.projectName || p.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleClose} variant="outlined">Annuler</Button>
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={!form.title.trim() || saving}
+          startIcon={saving ? <CircularProgress size={16} /> : <AddIcon />}
+        >
+          Créer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const OccupationMap = ({ persons = [], projects = [], onTaskClick }) => {
   const theme = useTheme();
+  const queryClient = useQueryClient();
+  const [createDialog, setCreateDialog] = useState(null); // person object or null
 
   const projectCodeMap = useMemo(() =>
     Object.fromEntries(projects.map(p => [p.id, p.projectCode || p.code || ''])),
@@ -100,6 +215,7 @@ const OccupationMap = ({ persons = [], projects = [], onTaskClick }) => {
   }
 
   return (
+    <>
     <Grid container spacing={2}>
       {rows.map(person => (
         <Grid item xs={12} sm={6} md={4} lg={3} key={person.id}>
@@ -219,11 +335,37 @@ const OccupationMap = ({ persons = [], projects = [], onTaskClick }) => {
                   })}
                 </Box>
               )}
+
+              {/* Bouton ajouter une tâche */}
+              <Box sx={{ mt: 1.5 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={() => setCreateDialog(person)}
+                  sx={{ borderRadius: 2, fontSize: '0.72rem', width: '100%' }}
+                >
+                  Ajouter une tâche
+                </Button>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
       ))}
     </Grid>
+
+    {/* Dialog création de tâche */}
+    <CreatePersonTaskDialog
+      open={Boolean(createDialog)}
+      person={createDialog}
+      projects={projects}
+      onClose={() => setCreateDialog(null)}
+      onCreated={() => {
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'by-assignee', createDialog?.email] });
+        setCreateDialog(null);
+      }}
+    />
+    </>
   );
 };
 

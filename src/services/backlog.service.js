@@ -1,5 +1,8 @@
 import { apiClient } from './api.service';
 import logger from './logger.service';
+import { API_ENDPOINTS } from '../config/api.config';
+
+const FEATURE_URL = API_ENDPOINTS.FEATURES;
 
 const backlogService = {
   /**
@@ -106,6 +109,22 @@ const backlogService = {
    * Met à jour une story via le endpoint command.
    * POST /story-command/update — Body: FullStoryDTO
    */
+  /**
+   * POST /features/{featureId}/assign-task/{taskId}
+   * Associe une tâche existante à une feature.
+   */
+  assignTaskToFeature: async (featureId, taskId) => {
+    try {
+      logger.info('Assigning task to feature', { featureId, taskId });
+      const response = await apiClient.post(`/feature-command/${featureId}/assign-task/${taskId}`);
+      logger.info('Task assigned to feature successfully', { featureId, taskId });
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to assign task to feature', { error: error.message, featureId, taskId });
+      return { success: false, error: error.message };
+    }
+  },
+
   updateStory: async (storyDTO) => {
     try {
       logger.info('Updating story via command', { id: storyDTO.id });
