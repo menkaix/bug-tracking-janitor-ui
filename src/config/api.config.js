@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
   PROJECTS: '/projects',
   PERSONS: '/person',
   PROJECT_COMMAND: '/project-command',
+  FEATURES: '/features',
 };
 
 /**
