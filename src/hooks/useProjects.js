@@ -41,6 +41,18 @@ export const useProjects = () => {
   const [allPersonsForTeam, setAllPersonsForTeam] = useState([]);
   const [loadingPersons, setLoadingPersons] = useState(false);
 
+  // Gestion des versions
+  const [versionsDialogProject, setVersionsDialogProject] = useState(null);
+  const [versionForm, setVersionForm] = useState({ name: '', creationDate: '', deploymentDate: '' });
+  const [editingVersion, setEditingVersion] = useState(null);
+  const [showVersionForm, setShowVersionForm] = useState(false);
+
+  // Gestion des environnements
+  const [envsDialogProject, setEnvsDialogProject] = useState(null);
+  const [envForm, setEnvForm] = useState({ name: '', type: 'DEV', url: '', description: '' });
+  const [editingEnv, setEditingEnv] = useState(null);
+  const [showEnvForm, setShowEnvForm] = useState(false);
+
   // Debounce la recherche pour éviter des requêtes à chaque frappe
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -78,6 +90,26 @@ export const useProjects = () => {
     },
     enabled: projects.length > 0,
     staleTime: 5 * 60 * 1000,
+  });
+
+  const versionsQuery = useQuery({
+    queryKey: ['project-versions', versionsDialogProject?.id],
+    queryFn: async () => {
+      if (!versionsDialogProject) return [];
+      const result = await projectService.getVersions(versionsDialogProject.projectCode || versionsDialogProject.id);
+      return result.success ? result.data : [];
+    },
+    enabled: Boolean(versionsDialogProject),
+  });
+
+  const envsQuery = useQuery({
+    queryKey: ['project-environments', envsDialogProject?.id],
+    queryFn: async () => {
+      if (!envsDialogProject) return [];
+      const result = await projectService.getEnvironments(envsDialogProject.projectCode || envsDialogProject.id);
+      return result.success ? result.data : [];
+    },
+    enabled: Boolean(envsDialogProject),
   });
 
   const tasks = Object.values(tasksQuery.data || {}).flat();
@@ -161,6 +193,78 @@ export const useProjects = () => {
       enqueueSnackbar('Compétences synchronisées', { variant: 'success' });
     },
     onError: () => enqueueSnackbar('Erreur lors de la synchronisation', { variant: 'error' }),
+  });
+
+  // ── Version mutations ────────────────────────────────────────────────────
+
+  const addVersionMutation = useMutation({
+    mutationFn: ({ projectRef, versionData }) => projectService.addVersion(projectRef, versionData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-versions', versionsDialogProject?.id] });
+      enqueueSnackbar('Version ajoutée', { variant: 'success' });
+      setShowVersionForm(false);
+      setVersionForm({ name: '', creationDate: '', deploymentDate: '' });
+      setEditingVersion(null);
+    },
+    onError: () => enqueueSnackbar('Erreur lors de l\'ajout de la version', { variant: 'error' }),
+  });
+
+  const updateVersionMutation = useMutation({
+    mutationFn: ({ projectRef, versionId, versionData }) =>
+      projectService.updateVersion(projectRef, versionId, versionData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-versions', versionsDialogProject?.id] });
+      enqueueSnackbar('Version mise à jour', { variant: 'success' });
+      setShowVersionForm(false);
+      setVersionForm({ name: '', creationDate: '', deploymentDate: '' });
+      setEditingVersion(null);
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la mise à jour de la version', { variant: 'error' }),
+  });
+
+  const removeVersionMutation = useMutation({
+    mutationFn: ({ projectRef, versionId }) => projectService.removeVersion(projectRef, versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-versions', versionsDialogProject?.id] });
+      enqueueSnackbar('Version supprimée', { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la suppression de la version', { variant: 'error' }),
+  });
+
+  // ── Environment mutations ────────────────────────────────────────────────
+
+  const addEnvMutation = useMutation({
+    mutationFn: ({ projectRef, envData }) => projectService.addEnvironment(projectRef, envData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-environments', envsDialogProject?.id] });
+      enqueueSnackbar('Environnement ajouté', { variant: 'success' });
+      setShowEnvForm(false);
+      setEnvForm({ name: '', type: 'DEV', url: '', description: '' });
+      setEditingEnv(null);
+    },
+    onError: () => enqueueSnackbar('Erreur lors de l\'ajout de l\'environnement', { variant: 'error' }),
+  });
+
+  const updateEnvMutation = useMutation({
+    mutationFn: ({ projectRef, envId, envData }) =>
+      projectService.updateEnvironment(projectRef, envId, envData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-environments', envsDialogProject?.id] });
+      enqueueSnackbar('Environnement mis à jour', { variant: 'success' });
+      setShowEnvForm(false);
+      setEnvForm({ name: '', type: 'DEV', url: '', description: '' });
+      setEditingEnv(null);
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la mise à jour de l\'environnement', { variant: 'error' }),
+  });
+
+  const removeEnvMutation = useMutation({
+    mutationFn: ({ projectRef, envId }) => projectService.removeEnvironment(projectRef, envId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-environments', envsDialogProject?.id] });
+      enqueueSnackbar('Environnement supprimé', { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la suppression de l\'environnement', { variant: 'error' }),
   });
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
@@ -249,6 +353,115 @@ export const useProjects = () => {
     refreshMemberSkillsMutation.mutate({ projectRef: teamDialogProject.projectCode || teamDialogProject.id, personId });
   };
 
+  // ── Version handlers ─────────────────────────────────────────────────────
+
+  const handleOpenVersionsDialog = (project) => {
+    setVersionsDialogProject(project);
+    setShowVersionForm(false);
+    setVersionForm({ name: '', creationDate: '', deploymentDate: '' });
+    setEditingVersion(null);
+  };
+
+  const handleCloseVersionsDialog = () => {
+    setVersionsDialogProject(null);
+    setShowVersionForm(false);
+    setVersionForm({ name: '', creationDate: '', deploymentDate: '' });
+    setEditingVersion(null);
+  };
+
+  const handleVersionFormChange = (e) => {
+    const { name, value } = e.target;
+    setVersionForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditVersion = (version) => {
+    setEditingVersion(version);
+    setVersionForm({
+      name: version.name || '',
+      creationDate: version.creationDate || '',
+      deploymentDate: version.deploymentDate || '',
+    });
+    setShowVersionForm(true);
+  };
+
+  const handleSubmitVersion = (e) => {
+    e.preventDefault();
+    if (!versionsDialogProject) return;
+    const projectRef = versionsDialogProject.projectCode || versionsDialogProject.id;
+    if (editingVersion) {
+      updateVersionMutation.mutate({ projectRef, versionId: editingVersion.id, versionData: versionForm });
+    } else {
+      addVersionMutation.mutate({ projectRef, versionData: versionForm });
+    }
+  };
+
+  const handleRemoveVersion = async (versionId) => {
+    if (!versionsDialogProject) return;
+    const ok = await confirm({
+      title: 'Supprimer la version ?',
+      description: 'Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+    });
+    if (!ok) return;
+    const projectRef = versionsDialogProject.projectCode || versionsDialogProject.id;
+    removeVersionMutation.mutate({ projectRef, versionId });
+  };
+
+  // ── Environment handlers ─────────────────────────────────────────────────
+
+  const handleOpenEnvsDialog = (project) => {
+    setEnvsDialogProject(project);
+    setShowEnvForm(false);
+    setEnvForm({ name: '', type: 'DEV', url: '', description: '' });
+    setEditingEnv(null);
+  };
+
+  const handleCloseEnvsDialog = () => {
+    setEnvsDialogProject(null);
+    setShowEnvForm(false);
+    setEnvForm({ name: '', type: 'DEV', url: '', description: '' });
+    setEditingEnv(null);
+  };
+
+  const handleEnvFormChange = (e) => {
+    const { name, value } = e.target;
+    setEnvForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditEnv = (env) => {
+    setEditingEnv(env);
+    setEnvForm({
+      name: env.name || '',
+      type: env.type || 'DEV',
+      url: env.url || '',
+      description: env.description || '',
+    });
+    setShowEnvForm(true);
+  };
+
+  const handleSubmitEnv = (e) => {
+    e.preventDefault();
+    if (!envsDialogProject) return;
+    const projectRef = envsDialogProject.projectCode || envsDialogProject.id;
+    if (editingEnv) {
+      updateEnvMutation.mutate({ projectRef, envId: editingEnv.id, envData: envForm });
+    } else {
+      addEnvMutation.mutate({ projectRef, envData: envForm });
+    }
+  };
+
+  const handleRemoveEnv = async (envId) => {
+    if (!envsDialogProject) return;
+    const ok = await confirm({
+      title: 'Supprimer l\'environnement ?',
+      description: 'Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+    });
+    if (!ok) return;
+    const projectRef = envsDialogProject.projectCode || envsDialogProject.id;
+    removeEnvMutation.mutate({ projectRef, envId });
+  };
+
   const getCalculatedStatus = useCallback(
     (projectId) => {
       const projectTasks = tasksQuery.data?.[projectId] || [];
@@ -291,5 +504,33 @@ export const useProjects = () => {
     handleAddTeamMember,
     handleRemoveTeamMember,
     handleRefreshMemberSkills,
+    // Versions management
+    versionsDialogProject,
+    versionsQuery,
+    versionForm,
+    editingVersion,
+    setEditingVersion,
+    showVersionForm,
+    setShowVersionForm,
+    handleOpenVersionsDialog,
+    handleCloseVersionsDialog,
+    handleVersionFormChange,
+    handleEditVersion,
+    handleSubmitVersion,
+    handleRemoveVersion,
+    // Environments management
+    envsDialogProject,
+    envsQuery,
+    envForm,
+    editingEnv,
+    setEditingEnv,
+    showEnvForm,
+    setShowEnvForm,
+    handleOpenEnvsDialog,
+    handleCloseEnvsDialog,
+    handleEnvFormChange,
+    handleEditEnv,
+    handleSubmitEnv,
+    handleRemoveEnv,
   };
 };

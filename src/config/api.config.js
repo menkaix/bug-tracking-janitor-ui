@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
   PROJECT_COMMAND: '/project-command',
   FEATURES: '/features',
   SKILLS: '/skill',
+  ISSUES: '/issue',
 };
 
 /**

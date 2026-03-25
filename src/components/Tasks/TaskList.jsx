@@ -25,8 +25,9 @@ import {
   Delete as DeleteIcon,
   CalendarToday as CalendarIcon,
   Assignment as AssignmentIcon,
+  BugReport as BugReportIcon,
 } from '@mui/icons-material';
-import { TASK_STATUS_OPTIONS, getTaskStatusInfo } from '../../models/task.model';
+import { TASK_STATUS_OPTIONS, getTaskStatusInfo, isIssue, ISSUE_SEVERITY_CONFIG, ISSUE_TYPE_CONFIG } from '../../models/task.model';
 import { resolveAssigneeNames } from '../../utils/assigneeUtils';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -97,6 +98,8 @@ const TaskList = ({
                   '&.Mui-selected:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.12) },
                   '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.04) },
                   transition: 'background-color 0.2s',
+                  borderLeft: isIssue(task) ? '3px solid' : 'none',
+                  borderLeftColor: isIssue(task) ? 'error.main' : 'transparent',
                 }}
               >
                 <TableCell padding="checkbox">
@@ -104,7 +107,29 @@ const TaskList = ({
                 </TableCell>
 
                 <TableCell>
-                  <Typography variant="body1" fontWeight={500}>{task.title}</Typography>
+                  <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                    {isIssue(task) && (
+                      <BugReportIcon fontSize="small" color="error" sx={{ mr: 0.5, verticalAlign: 'middle', flexShrink: 0 }} />
+                    )}
+                    <Typography variant="body1" fontWeight={500} sx={{ display: 'inline' }}>{task.title}</Typography>
+                    {isIssue(task) && task.severity && ISSUE_SEVERITY_CONFIG[task.severity] && (
+                      <Chip
+                        label={ISSUE_SEVERITY_CONFIG[task.severity].label}
+                        color={ISSUE_SEVERITY_CONFIG[task.severity].color}
+                        size="small"
+                        sx={{ ml: 0.5, fontWeight: 600, height: 20, fontSize: '0.65rem' }}
+                      />
+                    )}
+                    {isIssue(task) && task.type && ISSUE_TYPE_CONFIG[task.type] && (
+                      <Chip
+                        label={ISSUE_TYPE_CONFIG[task.type].label}
+                        color={ISSUE_TYPE_CONFIG[task.type].color}
+                        size="small"
+                        variant="outlined"
+                        sx={{ ml: 0.5, height: 20, fontSize: '0.65rem' }}
+                      />
+                    )}
+                  </Stack>
                   {task.trackingReference && (
                     <Typography variant="caption" color="text.secondary">{task.trackingReference}</Typography>
                   )}

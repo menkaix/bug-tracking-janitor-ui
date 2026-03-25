@@ -107,3 +107,25 @@ export const EMPTY_TASK_FORM = {
   comments: [],
   links: [],
 };
+
+export const ISSUE_TYPE_CONFIG = {
+  BUG:             { label: 'Bug',           color: 'error',   icon: 'bug' },
+  REGRESSION:      { label: 'Régression',    color: 'error',   icon: 'regression' },
+  VULNERABILITY:   { label: 'Vulnérabilité', color: 'error',   icon: 'security' },
+  INCIDENT:        { label: 'Incident',      color: 'warning', icon: 'incident' },
+  PERFORMANCE:     { label: 'Performance',   color: 'warning', icon: 'performance' },
+  FEATURE_REQUEST: { label: 'Feature',       color: 'info',    icon: 'feature' },
+  IMPROVEMENT:     { label: 'Amélioration',  color: 'info',    icon: 'improvement' },
+  QUESTION:        { label: 'Question',      color: 'default', icon: 'question' },
+  SUPPORT:         { label: 'Support',       color: 'default', icon: 'support' },
+};
+
+export const ISSUE_SEVERITY_CONFIG = {
+  CRITICAL: { label: 'Critique', color: 'error',   rank: 4 },
+  HIGH:     { label: 'Haute',    color: 'warning', rank: 3 },
+  MEDIUM:   { label: 'Moyenne',  color: 'info',    rank: 2 },
+  LOW:      { label: 'Basse',    color: 'default', rank: 1 },
+  INFO:     { label: 'Info',     color: 'default', rank: 0 },
+};
+
+export const isIssue = (task) => task?.entityType === 'ISSUE';

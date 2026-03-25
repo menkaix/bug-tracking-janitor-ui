@@ -58,6 +58,7 @@ const Navbar = ({ onLogout }) => {
     { path: '/persons', label: 'Personnes', icon: <PeopleIcon /> },
     { path: '/skills', label: 'Skills', icon: <SkillsIcon /> },
     { path: '/feature-tree', label: 'Arbre Features', icon: <TreeIcon /> },
+    { path: '/issues', label: 'Issues', icon: <BugReportIcon /> },
   ];
 
   const drawer = (

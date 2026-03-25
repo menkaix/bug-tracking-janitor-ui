@@ -47,6 +47,8 @@ import {
   Group as TeamIcon,
   Sync as SyncIcon,
   PersonRemove as PersonRemoveIcon,
+  LocalOffer as TagIcon,
+  Cloud as CloudIcon,
 } from '@mui/icons-material';
 import { formatDateLong } from '../utils/dateUtils';
 import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
@@ -97,6 +99,32 @@ const ProjectsPage = () => {
     handleAddTeamMember,
     handleRemoveTeamMember,
     handleRefreshMemberSkills,
+    // Versions
+    versionsDialogProject,
+    versionsQuery,
+    versionForm,
+    editingVersion,
+    showVersionForm,
+    setShowVersionForm,
+    handleOpenVersionsDialog,
+    handleCloseVersionsDialog,
+    handleVersionFormChange,
+    handleEditVersion,
+    handleSubmitVersion,
+    handleRemoveVersion,
+    // Environments
+    envsDialogProject,
+    envsQuery,
+    envForm,
+    editingEnv,
+    showEnvForm,
+    setShowEnvForm,
+    handleOpenEnvsDialog,
+    handleCloseEnvsDialog,
+    handleEnvFormChange,
+    handleEditEnv,
+    handleSubmitEnv,
+    handleRemoveEnv,
   } = useProjects();
 
   if (loading && projects.length === 0) return <Loading message="Chargement des projets..." />;
@@ -335,6 +363,24 @@ const ProjectsPage = () => {
                 >
                   Arbre
                 </Button>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<TagIcon />}
+                  onClick={() => handleOpenVersionsDialog(project)}
+                  sx={{ borderRadius: 2, fontWeight: 600, flex: '1 1 auto' }}
+                >
+                  Versions
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="success"
+                  startIcon={<CloudIcon />}
+                  onClick={() => handleOpenEnvsDialog(project)}
+                  sx={{ borderRadius: 2, fontWeight: 600, flex: '1 1 auto' }}
+                >
+                  Environnements
+                </Button>
               </CardActions>
             </Card>
           );
@@ -571,6 +617,335 @@ const ProjectsPage = () => {
 
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={handleCloseTeamDialog} variant="contained">Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de gestion des versions */}
+      <Dialog
+        open={Boolean(versionsDialogProject)}
+        onClose={handleCloseVersionsDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <TagIcon color="warning" />
+              <Typography variant="h5" fontWeight={700}>
+                Versions — {versionsDialogProject?.projectName}
+              </Typography>
+            </Stack>
+            <IconButton onClick={handleCloseVersionsDialog} size="small"><CloseIcon /></IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ py: 2 }}>
+          {versionsQuery.isLoading ? (
+            <LinearProgress sx={{ borderRadius: 2, mb: 2 }} />
+          ) : !versionsQuery.data?.length ? (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <TagIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+              <Typography color="text.secondary">Aucune version définie</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={1.5} sx={{ mb: 2 }}>
+              {(versionsQuery.data || []).map((version) => (
+                <Box
+                  key={version.id}
+                  sx={{ p: 2, borderRadius: 2, border: 1, borderColor: 'divider' }}
+                >
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle2" fontWeight={700}>{version.name}</Typography>
+                      <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                        {version.creationDate && (
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <CalendarIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                            <Typography variant="caption" color="text.secondary">
+                              Planifié : {version.creationDate}
+                            </Typography>
+                          </Stack>
+                        )}
+                        {version.deploymentDate && (
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <UpdateIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                            <Typography variant="caption" color="text.secondary">
+                              Déployé : {version.deploymentDate}
+                            </Typography>
+                          </Stack>
+                        )}
+                      </Stack>
+                    </Box>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="Modifier">
+                        <IconButton size="small" color="primary" onClick={() => handleEditVersion(version)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Supprimer">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleRemoveVersion(version.id)}
+                          sx={{ '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.1) } }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Stack>
+                </Box>
+              ))}
+            </Stack>
+          )}
+
+          <Divider sx={{ my: 2 }} />
+
+          {!showVersionForm ? (
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setShowVersionForm(true);
+                setEditingVersion(null);
+                // reset handled in hook but ensure UI reflects a blank form
+              }}
+            >
+              Ajouter une version
+            </Button>
+          ) : (
+            <Box component="form" onSubmit={handleSubmitVersion}>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                {editingVersion ? 'Modifier la version' : 'Nouvelle version'}
+              </Typography>
+              <Stack spacing={2}>
+                <TextField
+                  fullWidth
+                  label="Nom"
+                  name="name"
+                  value={versionForm.name}
+                  onChange={handleVersionFormChange}
+                  required
+                  size="small"
+                />
+                <TextField
+                  fullWidth
+                  label="Date planifiée"
+                  name="creationDate"
+                  type="date"
+                  value={versionForm.creationDate}
+                  onChange={handleVersionFormChange}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  fullWidth
+                  label="Date déploiement"
+                  name="deploymentDate"
+                  type="date"
+                  value={versionForm.deploymentDate}
+                  onChange={handleVersionFormChange}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <Stack direction="row" spacing={1}>
+                  <Button type="submit" variant="contained" color="warning" startIcon={editingVersion ? <EditIcon /> : <AddIcon />}>
+                    {editingVersion ? 'Mettre à jour' : 'Ajouter'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setShowVersionForm(false);
+                      setEditingVersion(null);
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                </Stack>
+              </Stack>
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleCloseVersionsDialog} variant="contained">Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de gestion des environnements */}
+      <Dialog
+        open={Boolean(envsDialogProject)}
+        onClose={handleCloseEnvsDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CloudIcon color="success" />
+              <Typography variant="h5" fontWeight={700}>
+                Environnements — {envsDialogProject?.projectName}
+              </Typography>
+            </Stack>
+            <IconButton onClick={handleCloseEnvsDialog} size="small"><CloseIcon /></IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ py: 2 }}>
+          {envsQuery.isLoading ? (
+            <LinearProgress sx={{ borderRadius: 2, mb: 2 }} />
+          ) : !envsQuery.data?.length ? (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <CloudIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+              <Typography color="text.secondary">Aucun environnement défini</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={1.5} sx={{ mb: 2 }}>
+              {(envsQuery.data || []).map((env) => {
+                const envTypeColor = {
+                  DEV: 'default',
+                  QA: 'info',
+                  STAGING: 'warning',
+                  PROD: 'success',
+                  RECETTE: 'secondary',
+                  PREPROD: 'warning',
+                }[env.type] || 'default';
+                return (
+                  <Box
+                    key={env.id}
+                    sx={{ p: 2, borderRadius: 2, border: 1, borderColor: 'divider' }}
+                  >
+                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+                      <Box sx={{ flex: 1 }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                          <Typography variant="subtitle2" fontWeight={700}>{env.name}</Typography>
+                          <Chip label={env.type} size="small" color={envTypeColor} sx={{ borderRadius: 1, fontSize: '0.7rem', height: 20 }} />
+                        </Stack>
+                        {env.url && (
+                          <Typography
+                            variant="caption"
+                            component="a"
+                            href={env.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ color: 'primary.main', display: 'block', mb: 0.25 }}
+                          >
+                            {env.url}
+                          </Typography>
+                        )}
+                        {env.description && (
+                          <Typography variant="caption" color="text.secondary">{env.description}</Typography>
+                        )}
+                      </Box>
+                      <Stack direction="row" spacing={0.5}>
+                        <Tooltip title="Modifier">
+                          <IconButton size="small" color="primary" onClick={() => handleEditEnv(env)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Supprimer">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleRemoveEnv(env.id)}
+                            sx={{ '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.1) } }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </Stack>
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
+
+          <Divider sx={{ my: 2 }} />
+
+          {!showEnvForm ? (
+            <Button
+              variant="outlined"
+              color="success"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setShowEnvForm(true);
+                setEditingEnv(null);
+              }}
+            >
+              Ajouter un environnement
+            </Button>
+          ) : (
+            <Box component="form" onSubmit={handleSubmitEnv}>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                {editingEnv ? 'Modifier l\'environnement' : 'Nouvel environnement'}
+              </Typography>
+              <Stack spacing={2}>
+                <TextField
+                  fullWidth
+                  label="Nom"
+                  name="name"
+                  value={envForm.name}
+                  onChange={handleEnvFormChange}
+                  required
+                  size="small"
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    name="type"
+                    value={envForm.type}
+                    label="Type"
+                    onChange={handleEnvFormChange}
+                  >
+                    {['DEV', 'QA', 'STAGING', 'PROD', 'RECETTE', 'PREPROD'].map((t) => (
+                      <MenuItem key={t} value={t}>{t}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  fullWidth
+                  label="URL"
+                  name="url"
+                  value={envForm.url}
+                  onChange={handleEnvFormChange}
+                  size="small"
+                  placeholder="https://..."
+                />
+                <TextField
+                  fullWidth
+                  label="Description"
+                  name="description"
+                  value={envForm.description}
+                  onChange={handleEnvFormChange}
+                  size="small"
+                  multiline
+                  rows={2}
+                />
+                <Stack direction="row" spacing={1}>
+                  <Button type="submit" variant="contained" color="success" startIcon={editingEnv ? <EditIcon /> : <AddIcon />}>
+                    {editingEnv ? 'Mettre à jour' : 'Ajouter'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setShowEnvForm(false);
+                      setEditingEnv(null);
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                </Stack>
+              </Stack>
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleCloseEnvsDialog} variant="contained">Fermer</Button>
         </DialogActions>
       </Dialog>
 

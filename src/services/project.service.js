@@ -198,6 +198,120 @@ const projectService = {
       return { success: false, error: error.message };
     }
   },
+
+  // ── Versions ──────────────────────────────────────────────────────────────
+
+  getVersions: async (projectRef) => {
+    try {
+      logger.debug('Fetching project versions', { projectRef });
+      const response = await apiClient.get(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/versions`
+      );
+      logger.info('Project versions fetched', { projectRef, count: response.data?.length });
+      return { success: true, data: response.data || [] };
+    } catch (error) {
+      logger.error('Failed to fetch project versions', { error: error.message, projectRef });
+      return { success: false, error: error.message };
+    }
+  },
+
+  addVersion: async (projectRef, versionData) => {
+    try {
+      logger.info('Adding project version', { projectRef, versionData });
+      const response = await apiClient.post(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/versions`,
+        versionData
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to add project version', { error: error.message, projectRef });
+      return { success: false, error: error.message };
+    }
+  },
+
+  updateVersion: async (projectRef, versionId, versionData) => {
+    try {
+      logger.info('Updating project version', { projectRef, versionId });
+      const response = await apiClient.put(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/versions/${versionId}`,
+        versionData
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to update project version', { error: error.message, projectRef, versionId });
+      return { success: false, error: error.message };
+    }
+  },
+
+  removeVersion: async (projectRef, versionId) => {
+    try {
+      logger.info('Removing project version', { projectRef, versionId });
+      const response = await apiClient.delete(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/versions/${versionId}`
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to remove project version', { error: error.message, projectRef, versionId });
+      return { success: false, error: error.message };
+    }
+  },
+
+  // ── Environments ──────────────────────────────────────────────────────────
+
+  getEnvironments: async (projectRef) => {
+    try {
+      logger.debug('Fetching project environments', { projectRef });
+      const response = await apiClient.get(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/environments`
+      );
+      logger.info('Project environments fetched', { projectRef, count: response.data?.length });
+      return { success: true, data: response.data || [] };
+    } catch (error) {
+      logger.error('Failed to fetch project environments', { error: error.message, projectRef });
+      return { success: false, error: error.message };
+    }
+  },
+
+  addEnvironment: async (projectRef, envData) => {
+    try {
+      logger.info('Adding project environment', { projectRef, envData });
+      const response = await apiClient.post(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/environments`,
+        envData
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to add project environment', { error: error.message, projectRef });
+      return { success: false, error: error.message };
+    }
+  },
+
+  updateEnvironment: async (projectRef, envId, envData) => {
+    try {
+      logger.info('Updating project environment', { projectRef, envId });
+      const response = await apiClient.put(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/environments/${envId}`,
+        envData
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to update project environment', { error: error.message, projectRef, envId });
+      return { success: false, error: error.message };
+    }
+  },
+
+  removeEnvironment: async (projectRef, envId) => {
+    try {
+      logger.info('Removing project environment', { projectRef, envId });
+      const response = await apiClient.delete(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/environments/${envId}`
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to remove project environment', { error: error.message, projectRef, envId });
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 export default projectService;
