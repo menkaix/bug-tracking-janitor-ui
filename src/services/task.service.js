@@ -154,6 +154,40 @@ const taskService = {
       return { success: false, error: error.message };
     }
   },
+
+  /**
+   * Met à jour uniquement le statut d'une tâche via PATCH.
+   * Le backend gère automatiquement startDate (IN_PROGRESS) et doneDate (DONE/réouverture).
+   * @param {string} id - ID de la tâche
+   * @param {string} status - Nouveau statut (ex: 'in-progress', 'done')
+   */
+  updateTaskStatus: async (id, status) => {
+    try {
+      logger.info('Updating task status', { id, status });
+      const response = await apiClient.patch(`${API_URL}/${id}/status`, { status });
+      logger.info('Task status updated successfully', { id, status });
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to update task status', { error: error.message, id, status });
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * Récupère la liste de tous les statuts valides depuis le backend.
+   * @returns {Promise<{success: boolean, data: string[]}>}
+   */
+  getAvailableStatuses: async () => {
+    try {
+      logger.debug('Fetching available task statuses');
+      const response = await apiClient.get(`${API_URL}/statuses`);
+      logger.info('Available statuses fetched', { count: response.data?.length });
+      return { success: true, data: response.data || [] };
+    } catch (error) {
+      logger.error('Failed to fetch available statuses', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 export default taskService;

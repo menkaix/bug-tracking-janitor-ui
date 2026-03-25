@@ -112,6 +112,92 @@ const projectService = {
       return { success: false, error: error.message };
     }
   },
+
+  /**
+   * Met à jour la phase d'un projet.
+   * @param {string} projectRef - Nom, code ou id MongoDB du projet
+   * @param {string} phase - Valeur de ProjectPhase (ex: 'PRODUCTION')
+   */
+  updateProjectPhase: async (projectRef, phase) => {
+    try {
+      logger.info('Updating project phase', { projectRef, phase });
+      const response = await apiClient.patch(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/phase`,
+        { phase }
+      );
+      logger.info('Project phase updated successfully', { projectRef, phase });
+      return { success: true, data: mapFromBackend(response.data) };
+    } catch (error) {
+      logger.error('Failed to update project phase', { error: error.message, projectRef, phase });
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * Récupère les projets filtrés par état calculé côté backend.
+   * @param {string} state - 'ACTIVE' | 'STANDBY' | 'CLOSED'
+   */
+  getProjectsByStatus: async (state) => {
+    try {
+      logger.debug('Fetching projects by status', { state });
+      const response = await apiClient.get(`${PROJECT_COMMAND_URL}/by-status/${state}`);
+      logger.info('Projects by status fetched', { state, count: response.data?.length });
+      return { success: true, data: (response.data || []).map(mapFromBackend) };
+    } catch (error) {
+      logger.error('Failed to fetch projects by status', { error: error.message, state });
+      return { success: false, error: error.message };
+    }
+  },
+
+  getProjectTeam: async (projectRef) => {
+    try {
+      logger.debug('Fetching project team', { projectRef });
+      const response = await apiClient.get(`${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/team`);
+      return { success: true, data: response.data || [] };
+    } catch (error) {
+      logger.error('Failed to fetch project team', { error: error.message, projectRef });
+      return { success: false, error: error.message };
+    }
+  },
+
+  addTeamMember: async (projectRef, personId) => {
+    try {
+      logger.info('Adding team member', { projectRef, personId });
+      const response = await apiClient.post(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/team/${personId}`
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to add team member', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  },
+
+  removeTeamMember: async (projectRef, personId) => {
+    try {
+      logger.info('Removing team member', { projectRef, personId });
+      const response = await apiClient.delete(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/team/${personId}`
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to remove team member', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  },
+
+  refreshTeamMemberSkills: async (projectRef, personId) => {
+    try {
+      logger.info('Refreshing team member skills', { projectRef, personId });
+      const response = await apiClient.post(
+        `${PROJECT_COMMAND_URL}/${encodeURIComponent(projectRef)}/team/${personId}/refresh-skills`
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Failed to refresh team member skills', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 export default projectService;

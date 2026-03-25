@@ -203,7 +203,7 @@ const TaskList = ({
                 <TableCell>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                    <Typography variant="body2">{formatDate(task.deadLine)}</Typography>
+                    <Typography variant="body2">{formatDate(task.dueDate)}</Typography>
                   </Stack>
                 </TableCell>
 

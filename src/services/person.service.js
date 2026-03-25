@@ -158,7 +158,21 @@ const personService = {
         error: error.message || 'Erreur lors de la suppression de la personne'
       };
     }
-  }
+  },
+
+  /**
+   * Récupère toutes les personnes actives sans pagination (pour les dropdowns).
+   */
+  async getAllPersonsFlat() {
+    try {
+      logger.debug('Fetching all persons (flat)');
+      const response = await apiClient.get(`${API_URL}/all`);
+      return { success: true, data: response.data || [] };
+    } catch (error) {
+      logger.error('Failed to fetch all persons (flat)', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 export default personService;

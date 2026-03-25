@@ -12,6 +12,7 @@ const EMPTY_PROJECT_FORM = {
   projectName: '',
   projectCode: '',
   description: '',
+  phase: 'INCONNUE',
   comments: [],
   links: [],
 };
@@ -33,6 +34,12 @@ export const useProjects = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [formData, setFormData] = useState({ ...EMPTY_PROJECT_FORM });
+  const [statusFilter, setStatusFilter] = useState('');
+
+  // Gestion de l'équipe
+  const [teamDialogProject, setTeamDialogProject] = useState(null);
+  const [allPersonsForTeam, setAllPersonsForTeam] = useState([]);
+  const [loadingPersons, setLoadingPersons] = useState(false);
 
   // Debounce la recherche pour éviter des requêtes à chaque frappe
   useEffect(() => {
@@ -120,6 +127,42 @@ export const useProjects = () => {
     onError: () => enqueueSnackbar('Erreur lors de la sauvegarde du projet', { variant: 'error' }),
   });
 
+  const phaseMutation = useMutation({
+    mutationFn: ({ projectRef, phase }) => projectService.updateProjectPhase(projectRef, phase),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
+    onError: () => enqueueSnackbar('Erreur lors de la mise à jour de la phase', { variant: 'error' }),
+  });
+
+  const addTeamMemberMutation = useMutation({
+    mutationFn: ({ projectRef, personId }) => projectService.addTeamMember(projectRef, personId),
+    onSuccess: (result) => {
+      if (result.success) setTeamDialogProject(result.data);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      enqueueSnackbar('Membre ajouté à l\'équipe', { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de l\'ajout du membre', { variant: 'error' }),
+  });
+
+  const removeTeamMemberMutation = useMutation({
+    mutationFn: ({ projectRef, personId }) => projectService.removeTeamMember(projectRef, personId),
+    onSuccess: (result) => {
+      if (result.success) setTeamDialogProject(result.data);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      enqueueSnackbar('Membre retiré de l\'équipe', { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar('Erreur lors du retrait du membre', { variant: 'error' }),
+  });
+
+  const refreshMemberSkillsMutation = useMutation({
+    mutationFn: ({ projectRef, personId }) => projectService.refreshTeamMemberSkills(projectRef, personId),
+    onSuccess: (result) => {
+      if (result.success) setTeamDialogProject(result.data);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      enqueueSnackbar('Compétences synchronisées', { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la synchronisation', { variant: 'error' }),
+  });
+
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
   const handlePageChange = (page) => setCurrentPage(page);
@@ -140,6 +183,7 @@ export const useProjects = () => {
       projectName: project.projectName || '',
       projectCode: project.projectCode || '',
       description: project.description || '',
+      phase: project.phase || 'INCONNUE',
       comments: [],
       links: [],
     });
@@ -172,6 +216,39 @@ export const useProjects = () => {
 
   const handleViewTasks = (projectId) => navigate(`/tasks?projectId=${projectId}`);
 
+  const handlePhaseChange = (projectRef, phase) => {
+    phaseMutation.mutate({ projectRef, phase });
+  };
+
+  const handleOpenTeamDialog = async (project) => {
+    setTeamDialogProject(project);
+    setLoadingPersons(true);
+    try {
+      const personSvc = (await import('../services/person.service')).default;
+      const result = await personSvc.getAllPersonsFlat();
+      if (result && result.success) setAllPersonsForTeam(result.data || []);
+    } finally {
+      setLoadingPersons(false);
+    }
+  };
+
+  const handleCloseTeamDialog = () => setTeamDialogProject(null);
+
+  const handleAddTeamMember = (personId) => {
+    if (!teamDialogProject) return;
+    addTeamMemberMutation.mutate({ projectRef: teamDialogProject.projectCode || teamDialogProject.id, personId });
+  };
+
+  const handleRemoveTeamMember = (personId) => {
+    if (!teamDialogProject) return;
+    removeTeamMemberMutation.mutate({ projectRef: teamDialogProject.projectCode || teamDialogProject.id, personId });
+  };
+
+  const handleRefreshMemberSkills = (personId) => {
+    if (!teamDialogProject) return;
+    refreshMemberSkillsMutation.mutate({ projectRef: teamDialogProject.projectCode || teamDialogProject.id, personId });
+  };
+
   const getCalculatedStatus = useCallback(
     (projectId) => {
       const projectTasks = tasksQuery.data?.[projectId] || [];
@@ -188,6 +265,8 @@ export const useProjects = () => {
     pagination,
     searchTerm,
     setSearchTerm,
+    statusFilter,
+    setStatusFilter,
     showModal,
     setShowModal,
     editingProject,
@@ -202,5 +281,15 @@ export const useProjects = () => {
     handleSubmit,
     handleViewTasks,
     getCalculatedStatus,
+    handlePhaseChange,
+    // Team management
+    teamDialogProject,
+    allPersonsForTeam,
+    loadingPersons,
+    handleOpenTeamDialog,
+    handleCloseTeamDialog,
+    handleAddTeamMember,
+    handleRemoveTeamMember,
+    handleRefreshMemberSkills,
   };
 };

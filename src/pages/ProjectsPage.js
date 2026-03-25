@@ -19,6 +19,15 @@ import {
   alpha,
   useTheme,
   Divider,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  ToggleButton,
+  ToggleButtonGroup,
+  LinearProgress,
+  Autocomplete,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,13 +43,17 @@ import {
   Update as UpdateIcon,
   Link as LinkIcon,
   AccountTree as TreeIcon,
+  WorkspacePremium as PhaseIcon,
+  Group as TeamIcon,
+  Sync as SyncIcon,
+  PersonRemove as PersonRemoveIcon,
 } from '@mui/icons-material';
 import { formatDateLong } from '../utils/dateUtils';
 import AbstractEntityEditor from '../components/Common/AbstractEntityEditor';
 import Loading from '../components/Common/Loading';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import Pagination from '../components/Common/Pagination';
-import { getProjectStatusInfo } from '../utils/projectStatus';
+import { getProjectStatusInfo, getProjectPhaseInfo, PROJECT_STATE_OPTIONS, PROJECT_PHASE_OPTIONS } from '../utils/projectStatus';
 import { useProjects } from '../hooks/useProjects';
 
 const formatDate = formatDateLong;
@@ -59,6 +72,8 @@ const ProjectsPage = () => {
     pagination,
     searchTerm,
     setSearchTerm,
+    statusFilter,
+    setStatusFilter,
     showModal,
     setShowModal,
     editingProject,
@@ -73,9 +88,29 @@ const ProjectsPage = () => {
     handleSubmit,
     handleViewTasks,
     getCalculatedStatus,
+    handlePhaseChange,
+    teamDialogProject,
+    allPersonsForTeam,
+    loadingPersons,
+    handleOpenTeamDialog,
+    handleCloseTeamDialog,
+    handleAddTeamMember,
+    handleRemoveTeamMember,
+    handleRefreshMemberSkills,
   } = useProjects();
 
   if (loading && projects.length === 0) return <Loading message="Chargement des projets..." />;
+
+  const visibleProjects = statusFilter
+    ? projects.filter((p) => getCalculatedStatus(p.id) === statusFilter)
+    : projects;
+
+  const SKILL_LEVEL_LABELS = {
+    NEVER_HEARD: 'Jamais entendu', HEARD_OF: 'Entendu parler',
+    THEORETICAL: 'Théorique', POC: 'PoC réalisé',
+    ONE_PROJECT: '1 projet', SEVERAL_PROJECTS: 'Plusieurs projets',
+    REGULAR_USE: 'Usage régulier',
+  };
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -87,6 +122,7 @@ const ProjectsPage = () => {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {pagination.totalElements} projet(s) au total
+            {statusFilter && ` · ${visibleProjects.length} affiché(s)`}
           </Typography>
         </Box>
         <Button
@@ -100,17 +136,30 @@ const ProjectsPage = () => {
         </Button>
       </Box>
 
-      {/* Barre de recherche */}
-      <Box sx={{ mb: 4 }}>
+      {/* Barre de recherche + filtre statut */}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4 }} alignItems="center">
         <TextField
           fullWidth
           placeholder="Rechercher un projet..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
-          sx={{ maxWidth: 600, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+          sx={{ maxWidth: 500, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
         />
-      </Box>
+        <ToggleButtonGroup
+          value={statusFilter}
+          exclusive
+          onChange={(_, val) => setStatusFilter(val ?? '')}
+          size="small"
+          sx={{ flexShrink: 0 }}
+        >
+          {PROJECT_STATE_OPTIONS.map((opt) => (
+            <ToggleButton key={opt.value} value={opt.value} sx={{ borderRadius: 2, px: 2 }}>
+              {opt.label}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      </Stack>
 
       {error && <ErrorMessage message={error} onRetry={loadProjects} />}
 
@@ -127,8 +176,10 @@ const ProjectsPage = () => {
           mb: 4,
         }}
       >
-        {projects.map((project) => {
-          const statusInfo = getProjectStatusInfo(getCalculatedStatus(project.id));
+        {visibleProjects.map((project) => {
+          const calculatedStatus = getCalculatedStatus(project.id);
+          const statusInfo = getProjectStatusInfo(calculatedStatus);
+          const phaseInfo = getProjectPhaseInfo(project.phase);
           return (
             <Card
               key={project.id}
@@ -215,8 +266,17 @@ const ProjectsPage = () => {
                   {project.description || 'Aucune description pour ce projet.'}
                 </Typography>
 
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 'auto' }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 'auto' }} flexWrap="wrap" useFlexGap>
                   <Chip label={statusInfo.label} size="small" color={statusInfo.color} />
+                  {project.phase && project.phase !== 'INCONNUE' && (
+                    <Chip
+                      icon={<PhaseIcon sx={{ fontSize: '0.75rem !important' }} />}
+                      label={phaseInfo.label}
+                      size="small"
+                      variant="outlined"
+                      sx={{ height: 22, fontSize: '0.7rem' }}
+                    />
+                  )}
                   {project.links?.length > 0 && (
                     <Chip
                       icon={<LinkIcon sx={{ fontSize: '0.8rem !important' }} />}
@@ -248,25 +308,32 @@ const ProjectsPage = () => {
                 </Stack>
               </CardContent>
 
-              <CardActions sx={{ p: 2, borderTop: 1, borderColor: 'divider', gap: 1 }}>
+              <CardActions sx={{ p: 2, borderTop: 1, borderColor: 'divider', gap: 1, flexWrap: 'wrap' }}>
                 <Button
-                  fullWidth
                   variant="outlined"
                   startIcon={<VisibilityIcon />}
                   onClick={() => handleViewTasks(project.id)}
-                  sx={{ borderRadius: 2, fontWeight: 600 }}
+                  sx={{ borderRadius: 2, fontWeight: 600, flex: '1 1 auto' }}
                 >
-                  Voir les tâches
+                  Tâches
                 </Button>
                 <Button
-                  fullWidth
+                  variant="outlined"
+                  color="info"
+                  startIcon={<TeamIcon />}
+                  onClick={() => handleOpenTeamDialog(project)}
+                  sx={{ borderRadius: 2, fontWeight: 600, flex: '1 1 auto' }}
+                >
+                  Équipe {project.team?.length > 0 && `(${project.team.length})`}
+                </Button>
+                <Button
                   variant="outlined"
                   color="secondary"
                   startIcon={<TreeIcon />}
                   onClick={() => navigate(`/feature-tree?projectCode=${project.projectCode}`)}
-                  sx={{ borderRadius: 2, fontWeight: 600 }}
+                  sx={{ borderRadius: 2, fontWeight: 600, flex: '1 1 auto' }}
                 >
-                  Afficher l'arbre
+                  Arbre
                 </Button>
               </CardActions>
             </Card>
@@ -274,7 +341,7 @@ const ProjectsPage = () => {
         })}
       </Box>
 
-      {projects.length === 0 && !loading && (
+      {visibleProjects.length === 0 && !loading && (
         <Box sx={{ textAlign: 'center', py: 12, px: 3 }}>
           <FolderIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 3 }} />
           <Typography variant="h5" color="text.secondary" gutterBottom>
@@ -362,6 +429,20 @@ const ProjectsPage = () => {
                 placeholder="Décrivez votre projet..."
                 required
               />
+              <FormControl fullWidth>
+                <InputLabel>Phase du projet</InputLabel>
+                <Select
+                  value={formData.phase || 'INCONNUE'}
+                  label="Phase du projet"
+                  onChange={(e) => setFormData({ ...formData, phase: e.target.value })}
+                >
+                  {PROJECT_PHASE_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               {editingProject && (
                 <>
                   <Divider />
@@ -391,6 +472,108 @@ const ProjectsPage = () => {
           </DialogActions>
         </form>
       </Dialog>
+      {/* Dialog de gestion de l'équipe projet */}
+      <Dialog
+        open={Boolean(teamDialogProject)}
+        onClose={handleCloseTeamDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <TeamIcon color="info" />
+              <Typography variant="h5" fontWeight={700}>
+                Équipe — {teamDialogProject?.projectName}
+              </Typography>
+            </Stack>
+            <IconButton onClick={handleCloseTeamDialog} size="small"><CloseIcon /></IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ py: 2 }}>
+          {/* Membres actuels */}
+          {!teamDialogProject?.team?.length ? (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <TeamIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+              <Typography color="text.secondary">Aucun membre dans l'équipe</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={2} sx={{ mb: 3 }}>
+              {(teamDialogProject?.team || []).map((member) => (
+                <Box key={member.personId} sx={{
+                  p: 2, borderRadius: 2, border: 1, borderColor: 'divider',
+                }}>
+                  <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        {member.firstName} {member.lastName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">{member.email}</Typography>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                        {(member.skills || []).map((ps) => (
+                          <Chip
+                            key={ps.skillId}
+                            label={`${ps.skillName} · ${SKILL_LEVEL_LABELS[ps.level] || ps.level}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ borderRadius: 1, fontSize: '0.7rem' }}
+                          />
+                        ))}
+                        {(!member.skills || member.skills.length === 0) && (
+                          <Typography variant="caption" color="text.disabled">Aucune compétence</Typography>
+                        )}
+                      </Stack>
+                    </Box>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="Synchroniser les compétences">
+                        <IconButton size="small" color="primary"
+                          onClick={() => handleRefreshMemberSkills(member.personId)}>
+                          <SyncIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Retirer de l'équipe">
+                        <IconButton size="small" color="error"
+                          onClick={() => handleRemoveTeamMember(member.personId)}
+                          sx={{ '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.1) } }}>
+                          <PersonRemoveIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Stack>
+                </Box>
+              ))}
+            </Stack>
+          )}
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Ajouter un membre */}
+          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>Ajouter un membre</Typography>
+          {loadingPersons ? (
+            <LinearProgress sx={{ borderRadius: 2 }} />
+          ) : (
+            <Autocomplete
+              options={allPersonsForTeam.filter(
+                (p) => !(teamDialogProject?.team || []).some((m) => m.personId === p.id)
+              )}
+              getOptionLabel={(p) => `${p.firstName || ''} ${p.lastName || ''} (${p.email})`}
+              onChange={(_, person) => { if (person) handleAddTeamMember(person.id); }}
+              renderInput={(params) => (
+                <TextField {...params} label="Rechercher une personne" placeholder="Prénom, Nom ou email…"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+              )}
+              noOptionsText="Aucune personne disponible"
+            />
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleCloseTeamDialog} variant="contained">Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
     </Container>
   );
 };

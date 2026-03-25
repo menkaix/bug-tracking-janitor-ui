@@ -22,6 +22,12 @@ import {
   Tooltip,
   alpha,
   useTheme,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  LinearProgress,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,6 +40,8 @@ import {
   CalendarToday as CalendarIcon,
   People as PeopleIcon,
   ContentCopy as CopyIcon,
+  Psychology as SkillsIcon,
+  RemoveCircleOutline as RemoveIcon,
 } from '@mui/icons-material';
 import { formatDateLong } from '../utils/dateUtils';
 import Loading from '../components/Common/Loading';
@@ -54,6 +62,14 @@ function PersonsPage() {
     showModal,
     editingPerson,
     formData,
+    skillsDialogPerson,
+    allSkills,
+    addSkillDialogOpen,
+    setAddSkillDialogOpen,
+    selectedSkillId,
+    setSelectedSkillId,
+    selectedLevel,
+    setSelectedLevel,
     fetchPersons,
     handleSearchChange,
     handlePageChange,
@@ -65,7 +81,22 @@ function PersonsPage() {
     handleSubmit,
     handleDelete,
     handleCopyEmail,
+    handleOpenSkillsDialog,
+    handleCloseSkillsDialog,
+    handleAddSkill,
+    handleUpdateSkillLevel,
+    handleRemoveSkill,
   } = usePersons();
+
+  const SKILL_LEVEL_CONFIG = {
+    NEVER_HEARD:      { label: "Jamais entendu", value: 0, color: 'default' },
+    HEARD_OF:         { label: "Entendu parler", value: 1, color: 'default' },
+    THEORETICAL:      { label: "Théorique",      value: 2, color: 'info' },
+    POC:              { label: "PoC réalisé",     value: 3, color: 'warning' },
+    ONE_PROJECT:      { label: "1 projet réel",   value: 4, color: 'primary' },
+    SEVERAL_PROJECTS: { label: "Plusieurs projets", value: 5, color: 'primary' },
+    REGULAR_USE:      { label: "Usage régulier",  value: 6, color: 'success' },
+  };
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -181,11 +212,21 @@ function PersonsPage() {
                       <TableCell>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                          <Typography variant="body2">{formatDate(person.updateDate)}</Typography>
+                          <Typography variant="body2">{formatDate(person.lastUpdateDate)}</Typography>
                         </Stack>
                       </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1} justifyContent="center">
+                          <Tooltip title="Compétences">
+                            <IconButton
+                              onClick={() => handleOpenSkillsDialog(person)}
+                              color="secondary"
+                              size="small"
+                              sx={{ '&:hover': { backgroundColor: alpha(theme.palette.secondary.main, 0.1) } }}
+                            >
+                              <SkillsIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Modifier">
                             <IconButton
                               onClick={() => handleEditClick(person)}
@@ -284,6 +325,16 @@ function PersonsPage() {
                 required
                 InputProps={{ startAdornment: <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
               />
+              <TextField
+                fullWidth
+                label="Description"
+                name="description"
+                value={formData.description}
+                onChange={handleFormChange}
+                multiline
+                rows={3}
+                placeholder="Rôle, spécialités, notes…"
+              />
             </Stack>
           </DialogContent>
 
@@ -301,6 +352,149 @@ function PersonsPage() {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Dialog de gestion des compétences */}
+      <Dialog
+        open={Boolean(skillsDialogPerson)}
+        onClose={handleCloseSkillsDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <SkillsIcon color="secondary" />
+              <Typography variant="h5" fontWeight={700}>
+                Compétences — {skillsDialogPerson?.firstName} {skillsDialogPerson?.lastName}
+              </Typography>
+            </Stack>
+            <IconButton onClick={handleCloseSkillsDialog} size="small"><CloseIcon /></IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ py: 2 }}>
+          {/* Liste des skills existants */}
+          {skillsDialogPerson?.skills?.length === 0 || !skillsDialogPerson?.skills ? (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <SkillsIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+              <Typography color="text.secondary">Aucune compétence enregistrée</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={2} sx={{ mb: 2 }}>
+              {(skillsDialogPerson?.skills || []).map((ps) => {
+                const cfg = SKILL_LEVEL_CONFIG[ps.level] || { label: ps.level, value: 0, color: 'default' };
+                return (
+                  <Box key={ps.skillId} sx={{
+                    p: 2, borderRadius: 2, border: 1, borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', backgroundColor: alpha(theme.palette.primary.main, 0.02) },
+                  }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                      <Box sx={{ flex: 1 }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                          <Typography variant="subtitle2" fontWeight={700}>{ps.skillName}</Typography>
+                          <Chip label={cfg.label} size="small" color={cfg.color} sx={{ borderRadius: 1 }} />
+                        </Stack>
+                        <LinearProgress
+                          variant="determinate"
+                          value={(cfg.value / 6) * 100}
+                          color={cfg.color === 'default' ? 'inherit' : cfg.color}
+                          sx={{ height: 6, borderRadius: 3 }}
+                        />
+                      </Box>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <FormControl size="small" sx={{ minWidth: 160 }}>
+                          <Select
+                            value={ps.level}
+                            onChange={(e) => handleUpdateSkillLevel(ps.skillId, e.target.value)}
+                            sx={{ borderRadius: 2 }}
+                          >
+                            {Object.entries(SKILL_LEVEL_CONFIG).map(([key, val]) => (
+                              <MenuItem key={key} value={key}>{val.label}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <Tooltip title="Retirer">
+                          <IconButton size="small" color="error"
+                            onClick={() => handleRemoveSkill(ps.skillId)}
+                            sx={{ '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.1) } }}>
+                            <RemoveIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </Stack>
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Ajouter un skill */}
+          {addSkillDialogOpen ? (
+            <Stack spacing={2}>
+              <Typography variant="subtitle1" fontWeight={600}>Ajouter une compétence</Typography>
+              <Stack direction="row" spacing={2} alignItems="flex-end">
+                <FormControl fullWidth>
+                  <InputLabel>Skill</InputLabel>
+                  <Select
+                    value={selectedSkillId}
+                    label="Skill"
+                    onChange={(e) => setSelectedSkillId(e.target.value)}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {allSkills
+                      .filter((s) => !(skillsDialogPerson?.skills || []).some((ps) => ps.skillId === s.id))
+                      .map((s) => (
+                        <MenuItem key={s.id} value={s.id}>
+                          {s.name} {s.category && `· ${s.category}`}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+                <FormControl sx={{ minWidth: 180 }}>
+                  <InputLabel>Niveau</InputLabel>
+                  <Select
+                    value={selectedLevel}
+                    label="Niveau"
+                    onChange={(e) => setSelectedLevel(e.target.value)}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {Object.entries(SKILL_LEVEL_CONFIG).map(([key, val]) => (
+                      <MenuItem key={key} value={key}>{val.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button onClick={() => setAddSkillDialogOpen(false)} variant="outlined">Annuler</Button>
+                <Button
+                  onClick={handleAddSkill}
+                  variant="contained"
+                  disabled={!selectedSkillId}
+                  startIcon={<AddIcon />}
+                >
+                  Ajouter
+                </Button>
+              </Stack>
+            </Stack>
+          ) : (
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => setAddSkillDialogOpen(true)}
+              sx={{ borderRadius: 2 }}
+            >
+              Ajouter une compétence
+            </Button>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleCloseSkillsDialog} variant="contained">Fermer</Button>
+        </DialogActions>
       </Dialog>
     </Container>
   );
