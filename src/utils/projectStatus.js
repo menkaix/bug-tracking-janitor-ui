@@ -1,97 +1,101 @@
 /**
- * Utilitaires pour calculer le statut d'un projet selon l'état de ses tâches
+ * Utilitaires pour calculer et afficher le statut d'un projet selon l'état de ses tâches.
+ * Logique alignée avec ProjectState.compute() côté backend :
+ *   - ACTIVE  : au moins une tâche en cours ou à faire
+ *   - STANDBY : aucune tâche active, mais au moins une tâche PENDING
+ *   - CLOSED  : uniquement des tâches terminales (DONE, CANCELED) ou aucune tâche
  */
 
 /**
- * Calcule le statut d'un projet basé sur ses tâches
+ * Normalise un statut de tâche (backend ou frontend) en minuscules avec tirets.
+ * Ex: "IN_PROGRESS" → "in-progress", "to_spec" → "to-spec"
+ */
+const normalizeStatus = (s) => (s ? s.toLowerCase().replace(/_/g, '-') : '');
+
+const ACTIVE_TASK_STATUSES = new Set([
+  'new', 'todo', 'in-progress', 'to-spec', 'specifying', 'rnd', 'to-study', 'to-test', 'testing',
+]);
+const TERMINAL_TASK_STATUSES = new Set(['done', 'canceled', 'unknown']);
+
+/**
+ * Calcule le statut d'un projet basé sur ses tâches — miroir de ProjectState.compute().
  * @param {Array} tasks - Liste des tâches du projet
- * @returns {string} - Le statut calculé : 'NEW', 'ACTIVE', 'COMPLETED', 'ON_HOLD'
+ * @returns {'ACTIVE'|'STANDBY'|'CLOSED'} Le statut calculé
  */
 export const calculateProjectStatus = (tasks) => {
-  if (!tasks || tasks.length === 0) {
-    return 'NEW';
+  if (!tasks || tasks.length === 0) return 'CLOSED';
+
+  let hasPending = false;
+
+  for (const task of tasks) {
+    const s = normalizeStatus(task.status);
+    if (ACTIVE_TASK_STATUSES.has(s)) return 'ACTIVE';
+    if (s === 'pending') hasPending = true;
   }
 
-  const taskStatuses = tasks.map(t => t.status ? t.status.toLowerCase() : '');
-
-  // Vérifier si toutes les tâches sont terminées
-  const allDone = taskStatuses.every(status =>
-    status === 'done' ||
-    status === 'canceled'
-  );
-  if (allDone) {
-    return 'COMPLETED';
-  }
-
-  // Vérifier s'il y a des tâches "à faire" ou "en cours"
-  const hasActiveTask = taskStatuses.some(status =>
-    status === 'todo' ||
-    status === 'to-do' ||
-    status === 'in-progress' ||
-    status === 'in_progress' ||
-    status === 'inprogress' ||
-    status === 'to-test' ||
-    status === 'testing'
-  );
-  if (hasActiveTask) {
-    return 'ACTIVE';
-  }
-
-  // Vérifier si toutes les tâches sont "à étudier" ou "en attente"
-  const allOnHold = taskStatuses.every(status =>
-    status === 'to-study' ||
-    status === 'pending'
-  );
-  if (allOnHold) {
-    return 'ON_HOLD';
-  }
-
-  // Par défaut, considérer comme "en stand by"
-  return 'ON_HOLD';
+  return hasPending ? 'STANDBY' : 'CLOSED';
 };
 
 /**
- * Retourne les informations de style pour un statut de projet
- * @param {string} status - Le statut du projet
- * @returns {object} - Objet avec label et color
+ * Retourne les informations de style pour un statut de projet.
+ * Accepte aussi bien la valeur calculée côté frontend que le statut retourné par le backend.
+ * @param {string} status
+ * @returns {{ label: string, color: string }}
  */
 export const getProjectStatusInfo = (status) => {
-  const statusUpper = status ? status.toUpperCase() : '';
+  const s = status ? status.toUpperCase() : '';
 
-  switch (statusUpper) {
-    case 'NEW':
-    case 'NOUVEAU':
-      return {
-        label: 'Nouveau',
-        color: 'secondary',
-      };
+  switch (s) {
     case 'ACTIVE':
-    case 'ACTIF':
-    case 'IN_PROGRESS':
-    case 'IN PROGRESS':
-      return {
-        label: 'Actif',
-        color: 'primary',
-      };
+      return { label: 'Actif', color: 'primary' };
+
+    case 'STANDBY':
+    case 'ON_HOLD':
+    case 'EN_ATTENTE':
+      return { label: 'Stand by', color: 'warning' };
+
+    case 'CLOSED':
     case 'COMPLETED':
     case 'DONE':
     case 'TERMINÉ':
-      return {
-        label: 'Terminé',
-        color: 'success',
-      };
-    case 'ON_HOLD':
-    case 'STANDBY':
-    case 'STAND_BY':
-    case 'EN_ATTENTE':
-      return {
-        label: 'Stand by',
-        color: 'warning',
-      };
+      return { label: 'Clôturé', color: 'success' };
+
     default:
-      return {
-        label: status || 'Inconnu',
-        color: 'default',
-      };
+      return { label: status || 'Inconnu', color: 'default' };
   }
+};
+
+/**
+ * Options pour le filtre de statut de projet dans l'UI.
+ */
+export const PROJECT_STATE_OPTIONS = [
+  { value: '',        label: 'Tous les projets' },
+  { value: 'ACTIVE',  label: 'Actifs' },
+  { value: 'STANDBY', label: 'Stand by' },
+  { value: 'CLOSED',  label: 'Clôturés' },
+];
+
+/**
+ * Phases de projet — alignées avec le backend ProjectPhase enum.
+ */
+export const PROJECT_PHASE_OPTIONS = [
+  { value: 'INCONNUE',      label: 'Inconnue' },
+  { value: 'AVANT_VENTE',   label: 'Avant-vente' },
+  { value: 'CADRAGE',       label: 'Cadrage' },
+  { value: 'CONCEPTION',    label: 'Conception' },
+  { value: 'PREPRODUCTION', label: 'Pré-production' },
+  { value: 'PRODUCTION',    label: 'Production' },
+  { value: 'MAINTENANCE',   label: 'Maintenance' },
+];
+
+/**
+ * Retourne les informations d'affichage d'une phase de projet.
+ * @param {string} phase
+ * @returns {{ label: string, color: string }}
+ */
+export const getProjectPhaseInfo = (phase) => {
+  const opt = PROJECT_PHASE_OPTIONS.find((o) => o.value === phase);
+  return opt
+    ? { label: opt.label, color: 'default' }
+    : { label: phase || 'Inconnue', color: 'default' };
 };

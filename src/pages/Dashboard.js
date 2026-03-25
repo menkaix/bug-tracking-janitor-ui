@@ -77,9 +77,9 @@ const calculateProjectKPIs = (tasks, projects) => {
     return { ...p, calculatedStatus };
   });
   const activeProjects = projectsWithCalculatedStatus.filter(p => p.calculatedStatus === 'ACTIVE').length;
-  const completedProjects = projectsWithCalculatedStatus.filter(p => p.calculatedStatus === 'COMPLETED').length;
+  const completedProjects = projectsWithCalculatedStatus.filter(p => p.calculatedStatus === 'CLOSED').length;
   const activeProjectIds = new Set(
-    projectsWithCalculatedStatus.filter(p => p.calculatedStatus !== 'COMPLETED').map(p => p.id)
+    projectsWithCalculatedStatus.filter(p => p.calculatedStatus !== 'CLOSED').map(p => p.id)
   );
   const activeTasks = tasks.filter(t => activeProjectIds.has(t.projectId));
   const totalTasks = activeTasks.length;
@@ -279,7 +279,7 @@ const Dashboard = () => {
     estimate: '',
     trackingReference: '',
     plannedStart: '',
-    deadLine: '',
+    dueDate: '',
     assignees: [],
   });
 
@@ -287,7 +287,7 @@ const Dashboard = () => {
   const nonCompletedProjects = useMemo(() =>
     allProjects.filter(p => {
       const pt = allTasks.filter(t => t.projectId === p.id);
-      return calculateProjectStatus(pt) !== 'COMPLETED';
+      return calculateProjectStatus(pt) !== 'CLOSED';
     }).slice(0, 10),
   [allProjects, allTasks]);
 
@@ -348,7 +348,7 @@ const Dashboard = () => {
       estimate: task.estimate || '',
       trackingReference: task.trackingReference || '',
       plannedStart: task.plannedStart ? task.plannedStart.split('T')[0] : '',
-      deadLine: task.deadLine ? task.deadLine.split('T')[0] : '', // Use deadLine directly as in TasksPage
+      dueDate: task.dueDate ? task.dueDate.split('T')[0] : '',
       assignees: task.assignees || [],
     });
     setShowModal(true);
@@ -370,7 +370,7 @@ const Dashboard = () => {
     const taskData = {
       ...formData,
       plannedStart: formData.plannedStart ? new Date(formData.plannedStart).toISOString() : null,
-      deadLine: formData.deadLine ? new Date(formData.deadLine).toISOString() : null,
+      dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null,
     };
 
     let result;
@@ -625,7 +625,7 @@ const Dashboard = () => {
                 Performance par Projet
               </Typography>
               <Stack spacing={2}>
-                {projectsData.projectDetails.filter(p => p.status !== 'COMPLETED').slice(0, 10).map((project) => (
+                {projectsData.projectDetails.filter(p => p.status !== 'CLOSED').slice(0, 10).map((project) => (
                   <Card key={project.id} variant="outlined">
                     <CardContent sx={{ display: 'flex', flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
@@ -1199,8 +1199,8 @@ const Dashboard = () => {
                 <TextField
                   type="date"
                   label="Échéance"
-                  value={formData.deadLine}
-                  onChange={(e) => setFormData({ ...formData, deadLine: e.target.value })}
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
                   InputLabelProps={{ shrink: true }}
                   fullWidth
                 />

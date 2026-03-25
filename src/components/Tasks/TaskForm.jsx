@@ -164,8 +164,8 @@ const TaskForm = ({
                 <TextField
                   type="date"
                   label="Échéance"
-                  value={formData.deadLine}
-                  onChange={(e) => handleFieldChange('deadLine', e.target.value)}
+                  value={formData.dueDate}
+                  onChange={(e) => handleFieldChange('dueDate', e.target.value)}
                   InputLabelProps={{ shrink: true }}
                   InputProps={{ startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
                   sx={{ flex: 1 }}

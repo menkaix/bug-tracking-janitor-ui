@@ -122,11 +122,11 @@ const TaskCard = React.memo(({ task, persons, onEdit, onDelete, onStatusChange, 
           {/* Footer avec dates et actions */}
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
             {/* Date d'échéance */}
-            {task.deadLine && (
+            {task.dueDate && (
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <CalendarIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary">
-                  {formatDate(task.deadLine)}
+                  {formatDate(task.dueDate)}
                 </Typography>
               </Stack>
             )}

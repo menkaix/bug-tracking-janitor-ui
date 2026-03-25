@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Typography,
@@ -7,8 +7,19 @@ import {
   Paper,
   Tabs,
   Tab,
+  ToggleButtonGroup,
+  ToggleButton,
+  Chip,
+  Stack,
 } from '@mui/material';
-import { Add as AddIcon, ViewList as ViewListIcon, ViewKanban as ViewKanbanIcon, Folder as FolderIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  ViewList as ViewListIcon,
+  ViewKanban as ViewKanbanIcon,
+  Folder as FolderIcon,
+  BugReport as BugReportIcon,
+  Assignment as AssignmentIcon,
+} from '@mui/icons-material';
 import { useTasks } from '../hooks/useTasks';
 import ErrorMessage from '../components/Common/ErrorMessage';
 import TaskListSkeleton, { KanbanBoardSkeleton } from '../components/Common/TaskSkeleton';
@@ -55,6 +66,18 @@ const TasksPage = () => {
     handleBulkDelete, handleBulkStatusChange, handleBulkAssign,
   } = useTasks();
 
+  const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
+
+  const taskCount  = tasks.filter((t) => t.entityType !== 'ISSUE').length;
+  const issueCount = tasks.filter((t) => t.entityType === 'ISSUE').length;
+
+  const displayedTasks =
+    entityTypeFilter === 'ALL'
+      ? tasks
+      : entityTypeFilter === 'ISSUE'
+      ? tasks.filter((t) => t.entityType === 'ISSUE')
+      : tasks.filter((t) => t.entityType !== 'ISSUE');
+
   if (isLoading) return viewMode === 1 ? <KanbanBoardSkeleton /> : <TaskListSkeleton />;
   if (isError) return (
     <ErrorMessage
@@ -66,14 +89,49 @@ const TasksPage = () => {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* En-tête */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>Gestion des Tâches</Typography>
-          <Typography variant="body2" color="text.secondary">{pagination.totalElements} tâche(s) au total</Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Typography variant="body2" color="text.secondary">{pagination.totalElements} élément(s) au total</Typography>
+            <Chip
+              icon={<AssignmentIcon fontSize="small" />}
+              label={`${taskCount} tâche${taskCount !== 1 ? 's' : ''}`}
+              size="small"
+              variant="outlined"
+              color="primary"
+            />
+            <Chip
+              icon={<BugReportIcon fontSize="small" />}
+              label={`${issueCount} issue${issueCount !== 1 ? 's' : ''}`}
+              size="small"
+              variant="outlined"
+              color="error"
+            />
+          </Stack>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateTask} size="medium" sx={{ borderRadius: 2, px: 2, py: 1, fontWeight: 500 }}>
-          Nouvelle Tâche
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <ToggleButtonGroup
+            value={entityTypeFilter}
+            exclusive
+            onChange={(_, val) => { if (val !== null) setEntityTypeFilter(val); }}
+            size="small"
+            sx={{ '& .MuiToggleButton-root': { px: 2, py: 0.75, fontWeight: 500 } }}
+          >
+            <ToggleButton value="ALL">Tous</ToggleButton>
+            <ToggleButton value="TASK">
+              <AssignmentIcon fontSize="small" sx={{ mr: 0.5 }} />
+              Tâches
+            </ToggleButton>
+            <ToggleButton value="ISSUE">
+              <BugReportIcon fontSize="small" sx={{ mr: 0.5 }} />
+              Issues
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateTask} size="medium" sx={{ borderRadius: 2, px: 2, py: 1, fontWeight: 500 }}>
+            Nouvelle Tâche
+          </Button>
+        </Stack>
       </Box>
 
       {/* Onglets vue */}
@@ -129,7 +187,7 @@ const TasksPage = () => {
           />
 
           <TaskList
-            tasks={tasks}
+            tasks={displayedTasks}
             projects={projects}
             persons={persons}
             selectedTasks={selectedTasks}
@@ -159,7 +217,7 @@ const TasksPage = () => {
       {/* Vue Kanban */}
       {!noProjectSelected && viewMode === 1 && (
         <KanbanBoard
-          tasks={tasks}
+          tasks={displayedTasks}
           persons={persons}
           onEditTask={handleEditTask}
           onDeleteTask={handleDeleteTask}

@@ -16,6 +16,8 @@ import TasksPage from './pages/TasksPage';
 import ProjectsPage from './pages/ProjectsPage';
 import PersonsPage from './pages/PersonsPage';
 import FeatureTreePage from './pages/FeatureTreePage';
+import SkillsPage from './pages/SkillsPage';
+import IssuesPage from './pages/IssuesPage';
 import NetworkActivityOverlay from './components/Common/NetworkActivityOverlay';
 import theme from './theme/theme';
 import './App.css';
@@ -150,7 +152,9 @@ function App() {
                   <Route path="/tasks" element={<TasksPage />} />
                   <Route path="/projects" element={<ProjectsPage />} />
                   <Route path="/persons" element={<PersonsPage />} />
+                  <Route path="/skills" element={<SkillsPage />} />
                   <Route path="/feature-tree" element={<FeatureTreePage />} />
+                  <Route path="/issues" element={<IssuesPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Box>

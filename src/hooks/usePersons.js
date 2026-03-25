@@ -3,8 +3,9 @@ import { useSnackbar } from 'notistack';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useConfirm } from './useConfirm';
 import personService from '../services/person.service';
+import skillService from '../services/skill.service';
 
-const EMPTY_PERSON_FORM = { firstName: '', lastName: '', email: '' };
+const EMPTY_PERSON_FORM = { firstName: '', lastName: '', email: '', description: '' };
 
 /**
  * Controller hook pour la page Personnes — React Query + useMutation.
@@ -23,6 +24,12 @@ export const usePersons = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingPerson, setEditingPerson] = useState(null);
   const [formData, setFormData] = useState({ ...EMPTY_PERSON_FORM });
+
+  // Gestion du skillset
+  const [skillsDialogPerson, setSkillsDialogPerson] = useState(null);
+  const [addSkillDialogOpen, setAddSkillDialogOpen] = useState(false);
+  const [selectedSkillId, setSelectedSkillId] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState('THEORETICAL');
 
   // Debounce la recherche
   useEffect(() => {
@@ -46,6 +53,17 @@ export const usePersons = () => {
     },
     staleTime: 2 * 60 * 1000,
   });
+
+  // Catalogue de skills pour le sélecteur
+  const skillsQuery = useQuery({
+    queryKey: ['skills'],
+    queryFn: async () => {
+      const result = await skillService.getAllSkills();
+      return result.success ? result.data : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const allSkills = skillsQuery.data || [];
 
   const allPersons = personsQuery.data || [];
 
@@ -105,6 +123,44 @@ export const usePersons = () => {
     onError: () => enqueueSnackbar('Erreur lors de la suppression', { variant: 'error' }),
   });
 
+  // Mutation — ajout d'un skill à une personne
+  const addSkillMutation = useMutation({
+    mutationFn: ({ personId, skillId, level }) =>
+      skillService.addPersonSkill(personId, skillId, level),
+    onSuccess: (result) => {
+      setAddSkillDialogOpen(false);
+      setSelectedSkillId('');
+      setSelectedLevel('THEORETICAL');
+      if (result.success) setSkillsDialogPerson(result.data);
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+      enqueueSnackbar('Skill ajouté', { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar("Erreur lors de l'ajout du skill", { variant: 'error' }),
+  });
+
+  // Mutation — mise à jour du niveau d'un skill
+  const updateSkillLevelMutation = useMutation({
+    mutationFn: ({ personId, skillId, level }) =>
+      skillService.updatePersonSkillLevel(personId, skillId, level),
+    onSuccess: (result) => {
+      if (result.success) setSkillsDialogPerson(result.data);
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la mise à jour', { variant: 'error' }),
+  });
+
+  // Mutation — suppression d'un skill
+  const removeSkillMutation = useMutation({
+    mutationFn: ({ personId, skillId }) =>
+      skillService.removePersonSkill(personId, skillId),
+    onSuccess: (result) => {
+      if (result.success) setSkillsDialogPerson(result.data);
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+      enqueueSnackbar('Skill supprimé', { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la suppression du skill', { variant: 'error' }),
+  });
+
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
   const handleSearchChange = (e) => setSearchTerm(e.target.value);
@@ -126,6 +182,7 @@ export const usePersons = () => {
       firstName: person.firstName || '',
       lastName: person.lastName || '',
       email: person.email || '',
+      description: person.description || '',
     });
     setShowModal(true);
   };
@@ -154,6 +211,29 @@ export const usePersons = () => {
     deleteMutation.mutate(id);
   };
 
+  const handleOpenSkillsDialog = (person) => setSkillsDialogPerson(person);
+  const handleCloseSkillsDialog = () => {
+    setSkillsDialogPerson(null);
+    setAddSkillDialogOpen(false);
+    setSelectedSkillId('');
+    setSelectedLevel('THEORETICAL');
+  };
+
+  const handleAddSkill = () => {
+    if (!selectedSkillId || !skillsDialogPerson) return;
+    addSkillMutation.mutate({ personId: skillsDialogPerson.id, skillId: selectedSkillId, level: selectedLevel });
+  };
+
+  const handleUpdateSkillLevel = (skillId, level) => {
+    if (!skillsDialogPerson) return;
+    updateSkillLevelMutation.mutate({ personId: skillsDialogPerson.id, skillId, level });
+  };
+
+  const handleRemoveSkill = (skillId) => {
+    if (!skillsDialogPerson) return;
+    removeSkillMutation.mutate({ personId: skillsDialogPerson.id, skillId });
+  };
+
   const handleCopyEmail = useCallback((email) => {
     navigator.clipboard.writeText(email).then(() => {
       setCopiedEmail(email);
@@ -171,6 +251,15 @@ export const usePersons = () => {
     showModal,
     editingPerson,
     formData,
+    // Skills dialog
+    skillsDialogPerson,
+    allSkills,
+    addSkillDialogOpen,
+    setAddSkillDialogOpen,
+    selectedSkillId,
+    setSelectedSkillId,
+    selectedLevel,
+    setSelectedLevel,
     fetchPersons: () => queryClient.invalidateQueries({ queryKey: ['persons'] }),
     handleSearchChange,
     handlePageChange,
@@ -182,5 +271,10 @@ export const usePersons = () => {
     handleSubmit,
     handleDelete,
     handleCopyEmail,
+    handleOpenSkillsDialog,
+    handleCloseSkillsDialog,
+    handleAddSkill,
+    handleUpdateSkillLevel,
+    handleRemoveSkill,
   };
 };

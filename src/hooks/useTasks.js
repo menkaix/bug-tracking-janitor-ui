@@ -194,7 +194,7 @@ export const useTasks = () => {
 
   // Changement de statut — mise à jour optimiste
   const statusMutation = useMutation({
-    mutationFn: ({ taskId, task, newStatus }) => taskService.updateTask(taskId, { ...task, status: newStatus }),
+    mutationFn: ({ taskId, newStatus }) => taskService.updateTaskStatus(taskId, newStatus),
     onMutate: async ({ taskId, newStatus, currentQueryKey }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
       const previous = queryClient.getQueryData(currentQueryKey);
@@ -273,13 +273,8 @@ export const useTasks = () => {
 
   // Changement de statut en masse
   const bulkStatusMutation = useMutation({
-    mutationFn: ({ ids, newStatus, currentTasks }) =>
-      Promise.all(
-        ids.map((id) => {
-          const task = currentTasks.find((t) => t.id === id);
-          if (task) return taskService.updateTask(id, { ...task, status: newStatus });
-        })
-      ),
+    mutationFn: ({ ids, newStatus }) =>
+      Promise.all(ids.map((id) => taskService.updateTaskStatus(id, newStatus))),
     onSuccess: () => {
       setSelectedTasks([]);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -402,9 +397,7 @@ export const useTasks = () => {
   // ── Handlers CRUD ────────────────────────────────────────────────────────────
 
   const handleStatusChange = (taskId, newStatus) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    statusMutation.mutate({ taskId, task, newStatus, currentQueryKey: ['tasks', taskQueryParams] });
+    statusMutation.mutate({ taskId, newStatus, currentQueryKey: ['tasks', taskQueryParams] });
   };
 
   const handleProjectChange = (taskId, newProjectId) => {
@@ -461,7 +454,7 @@ export const useTasks = () => {
       estimate: task.estimate || '',
       trackingReference: task.trackingReference || '',
       plannedStart: toDateInputValue(task.plannedStart),
-      deadLine: toDateInputValue(task.deadLine),
+      dueDate: toDateInputValue(task.dueDate),
       assignees: task.assignees || [],
     });
     setShowModal(true);
@@ -486,7 +479,7 @@ export const useTasks = () => {
     const taskData = {
       ...formData,
       plannedStart: fromDateInputValue(formData.plannedStart),
-      deadLine: fromDateInputValue(formData.deadLine),
+      dueDate: fromDateInputValue(formData.dueDate),
     };
     saveMutation.mutate({
       id: editingTask?.id,
