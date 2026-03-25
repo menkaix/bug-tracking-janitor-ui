@@ -26,6 +26,7 @@ const EMPTY_ISSUE_FORM = {
   workaround: '',
   labels: [],
   priority: 'NORMAL',
+  assignees: [],
 };
 
 // ─── Hook principal ────────────────────────────────────────────────────────────
@@ -225,6 +226,7 @@ export const useIssues = () => {
       workaround: issue.workaround || '',
       labels: issue.labels || [],
       priority: issue.priority || 'NORMAL',
+      assignees: issue.assignees || [],
     });
     setShowReportForm(false);
     setShowModal(true);
@@ -259,6 +261,32 @@ export const useIssues = () => {
 
   const handleStatusChange = (issueId, status) => {
     statusMutation.mutate({ issueId, status });
+  };
+
+  const assignMutation = useMutation({
+    mutationFn: ({ issueId, email }) => issueService.assignPerson(issueId, email),
+    onSuccess: () => {
+      enqueueSnackbar('Personne assignée', { variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: () => enqueueSnackbar("Erreur lors de l'assignation", { variant: 'error' }),
+  });
+
+  const unassignMutation = useMutation({
+    mutationFn: ({ issueId, email }) => issueService.unassignPerson(issueId, email),
+    onSuccess: () => {
+      enqueueSnackbar('Personne retirée', { variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: () => enqueueSnackbar("Erreur lors du retrait", { variant: 'error' }),
+  });
+
+  const handleAssignPerson = (issueId, email) => {
+    assignMutation.mutate({ issueId, email });
+  };
+
+  const handleUnassignPerson = (issueId, email) => {
+    unassignMutation.mutate({ issueId, email });
   };
 
   const handlePageChange = (page) => {
@@ -313,6 +341,8 @@ export const useIssues = () => {
     saveMutation,
     deleteMutation,
     statusMutation,
+    assignMutation,
+    unassignMutation,
 
     // Handlers
     handleCreateClick,
@@ -323,6 +353,8 @@ export const useIssues = () => {
     handleSubmit,
     handleDelete,
     handleStatusChange,
+    handleAssignPerson,
+    handleUnassignPerson,
   };
 };
 
