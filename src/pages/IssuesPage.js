@@ -38,6 +38,7 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useIssues } from '../hooks/useIssues';
+import { ISSUE_STATUS_OPTIONS } from '../models/task.model';
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
@@ -49,18 +50,10 @@ const SEVERITY_CONFIG = {
   INFO:     { label: 'Info',      color: 'default',  icon: '⚪' },
 };
 
-const STATUS_CONFIG = {
-  OPEN:           { label: 'Ouvert',              color: 'warning' },
-  TRIAGED:        { label: 'Trié',               color: 'info' },
-  IN_PROGRESS:    { label: 'En cours',            color: 'primary' },
-  IN_REVIEW:      { label: 'En révision',         color: 'secondary' },
-  RESOLVED:       { label: 'Résolu',              color: 'success' },
-  CLOSED:         { label: 'Fermé',               color: 'default' },
-  WONT_FIX:       { label: 'Ne sera pas corrigé', color: 'error' },
-  DUPLICATE:      { label: 'Doublon',             color: 'default' },
-  NEED_MORE_INFO: { label: 'Info requise',        color: 'warning' },
-  REOPENED:       { label: 'Réouvert',            color: 'error' },
-};
+// Source unique de vérité : dérivé de ISSUE_STATUS_OPTIONS
+const STATUS_CONFIG = Object.fromEntries(
+  ISSUE_STATUS_OPTIONS.map(({ value, label, color }) => [value, { label, color }])
+);
 
 const TYPE_CONFIG = {
   BUG:             { label: 'Bug',             color: 'error' },

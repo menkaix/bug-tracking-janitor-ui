@@ -214,7 +214,6 @@ const ProjectsPage = () => {
             <Card
               key={project.id}
               sx={{
-                height: 420,
                 display: 'flex',
                 flexDirection: 'column',
                 borderRadius: 3,

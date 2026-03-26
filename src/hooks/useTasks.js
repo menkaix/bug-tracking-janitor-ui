@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, useMutation, keepPreviousData } from '@tansta
 import { useSnackbar } from 'notistack';
 import { useSearchParams } from 'react-router-dom';
 import taskService from '../services/task.service';
+import issueService from '../services/issue.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import backlogService from '../services/backlog.service';
@@ -194,7 +195,10 @@ export const useTasks = () => {
 
   // Changement de statut — mise à jour optimiste
   const statusMutation = useMutation({
-    mutationFn: ({ taskId, newStatus }) => taskService.updateTaskStatus(taskId, newStatus),
+    mutationFn: ({ taskId, newStatus, entityType }) =>
+      entityType === 'ISSUE'
+        ? issueService.updateIssueStatus(taskId, newStatus)
+        : taskService.updateTaskStatus(taskId, newStatus),
     onMutate: async ({ taskId, newStatus, currentQueryKey }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
       const previous = queryClient.getQueryData(currentQueryKey);
@@ -274,7 +278,12 @@ export const useTasks = () => {
   // Changement de statut en masse
   const bulkStatusMutation = useMutation({
     mutationFn: ({ ids, newStatus }) =>
-      Promise.all(ids.map((id) => taskService.updateTaskStatus(id, newStatus))),
+      Promise.all(ids.map((id) => {
+        const task = tasks.find((t) => t.id === id);
+        return task?.entityType === 'ISSUE'
+          ? issueService.updateIssueStatus(id, newStatus)
+          : taskService.updateTaskStatus(id, newStatus);
+      })),
     onSuccess: () => {
       setSelectedTasks([]);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -397,7 +406,13 @@ export const useTasks = () => {
   // ── Handlers CRUD ────────────────────────────────────────────────────────────
 
   const handleStatusChange = (taskId, newStatus) => {
-    statusMutation.mutate({ taskId, newStatus, currentQueryKey: ['tasks', taskQueryParams] });
+    const task = tasks.find((t) => t.id === taskId);
+    statusMutation.mutate({
+      taskId,
+      newStatus,
+      entityType: task?.entityType || 'TASK',
+      currentQueryKey: ['tasks', taskQueryParams],
+    });
   };
 
   const handleProjectChange = (taskId, newProjectId) => {

@@ -27,7 +27,7 @@ import {
   Assignment as AssignmentIcon,
   BugReport as BugReportIcon,
 } from '@mui/icons-material';
-import { TASK_STATUS_OPTIONS, getTaskStatusInfo, isIssue, ISSUE_SEVERITY_CONFIG, ISSUE_TYPE_CONFIG } from '../../models/task.model';
+import { TASK_STATUS_OPTIONS, ISSUE_STATUS_OPTIONS, getTaskStatusInfo, getIssueStatusInfo, isIssue, ISSUE_SEVERITY_CONFIG, ISSUE_TYPE_CONFIG } from '../../models/task.model';
 import { resolveAssigneeNames } from '../../utils/assigneeUtils';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -80,7 +80,8 @@ const TaskList = ({
         <TableBody>
           {tasks.map((task) => {
             const itemSelected = isSelected(task.id);
-            const statusInfo = getTaskStatusInfo(task.status);
+            const statusInfo = isIssue(task) ? getIssueStatusInfo(task.status) : getTaskStatusInfo(task.status);
+            const statusOptions = isIssue(task) ? ISSUE_STATUS_OPTIONS : TASK_STATUS_OPTIONS;
             const assigneesArr = task.assignees || [];
             const assigneeNames = resolveAssigneeNames(assigneesArr, persons);
 
@@ -209,8 +210,7 @@ const TaskList = ({
                         );
                       }}
                     >
-                      <MenuItem value=""><Typography variant="body2" color="text.secondary">Aucun statut</Typography></MenuItem>
-                      {TASK_STATUS_OPTIONS.map((option) => (
+                      {statusOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
                           <Stack direction="row" spacing={1.5} alignItems="center">
                             <Box sx={{ color: `${option.color}.main`, display: 'flex', alignItems: 'center' }}>{option.icon}</Box>
@@ -218,9 +218,6 @@ const TaskList = ({
                           </Stack>
                         </MenuItem>
                       ))}
-                      {task.status && !TASK_STATUS_OPTIONS.find((o) => o.value === task.status.toLowerCase()) && (
-                        <MenuItem value={task.status}><Typography variant="body2">{task.status}</Typography></MenuItem>
-                      )}
                     </Select>
                   </FormControl>
                 </TableCell>

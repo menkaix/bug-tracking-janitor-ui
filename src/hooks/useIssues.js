@@ -264,21 +264,35 @@ export const useIssues = () => {
   };
 
   const assignMutation = useMutation({
-    mutationFn: ({ issueId, email }) => issueService.assignPerson(issueId, email),
-    onSuccess: () => {
+    mutationFn: async ({ issueId, email }) => {
+      const result = await issueService.addAssignee(issueId, email);
+      if (!result.success) throw new Error(result.error || "Erreur lors de l'assignation");
+      return result.data;
+    },
+    onSuccess: (updatedIssue) => {
       enqueueSnackbar('Personne assignée', { variant: 'success' });
+      if (updatedIssue?.assignees) {
+        setFormData((prev) => ({ ...prev, assignees: updatedIssue.assignees }));
+      }
       queryClient.invalidateQueries({ queryKey: ['issues'] });
     },
-    onError: () => enqueueSnackbar("Erreur lors de l'assignation", { variant: 'error' }),
+    onError: (error) => enqueueSnackbar(error.message || "Erreur lors de l'assignation", { variant: 'error' }),
   });
 
   const unassignMutation = useMutation({
-    mutationFn: ({ issueId, email }) => issueService.unassignPerson(issueId, email),
-    onSuccess: () => {
+    mutationFn: async ({ issueId, email }) => {
+      const result = await issueService.removeAssignee(issueId, email);
+      if (!result.success) throw new Error(result.error || 'Erreur lors du retrait');
+      return result.data;
+    },
+    onSuccess: (updatedIssue) => {
       enqueueSnackbar('Personne retirée', { variant: 'success' });
+      if (updatedIssue?.assignees) {
+        setFormData((prev) => ({ ...prev, assignees: updatedIssue.assignees }));
+      }
       queryClient.invalidateQueries({ queryKey: ['issues'] });
     },
-    onError: () => enqueueSnackbar("Erreur lors du retrait", { variant: 'error' }),
+    onError: (error) => enqueueSnackbar(error.message || 'Erreur lors du retrait', { variant: 'error' }),
   });
 
   const handleAssignPerson = (issueId, email) => {

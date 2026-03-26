@@ -14,6 +14,16 @@ import {
   Tune as TuneIcon,
   Biotech as BiotechIcon,
   HelpOutline as HelpOutlineIcon,
+  // Issue status icons
+  NewReleases as OpenIcon,
+  FilterAlt as TriagedIcon,
+  RateReview as InReviewIcon,
+  TaskAlt as ResolvedIcon,
+  Lock as ClosedIcon,
+  NotInterested as WontFixIcon,
+  ContentCopy as DuplicateIcon,
+  QuestionMark as NeedInfoIcon,
+  Replay as ReopenedIcon,
 } from '@mui/icons-material';
 
 /**
@@ -129,3 +139,68 @@ export const ISSUE_SEVERITY_CONFIG = {
 };
 
 export const isIssue = (task) => task?.entityType === 'ISSUE';
+
+/**
+ * Statuts d'issue — alignés avec IssueStatus enum du backend.
+ * Cycle : OPEN → TRIAGED → IN_PROGRESS → IN_REVIEW → RESOLVED → CLOSED
+ *                                      ↘ WONT_FIX / DUPLICATE / NEED_MORE_INFO
+ *         CLOSED → REOPENED → IN_PROGRESS ...
+ */
+export const ISSUE_STATUS_OPTIONS = [
+  { value: 'OPEN',           label: 'Nouveau',      color: 'default',   icon: <OpenIcon fontSize="small" /> },
+  { value: 'TRIAGED',        label: 'À faire',      color: 'secondary', icon: <TriagedIcon fontSize="small" /> },
+  { value: 'IN_PROGRESS',    label: 'En cours',     color: 'primary',   icon: <ScheduleIcon fontSize="small" /> },
+  { value: 'IN_REVIEW',      label: 'Test en cours',color: 'info',      icon: <InReviewIcon fontSize="small" /> },
+  { value: 'RESOLVED',       label: 'Done',         color: 'success',   icon: <ResolvedIcon fontSize="small" /> },
+  { value: 'CLOSED',         label: 'Fermé',        color: 'default',   icon: <ClosedIcon fontSize="small" /> },
+  { value: 'WONT_FIX',       label: 'Annulé',       color: 'error',     icon: <WontFixIcon fontSize="small" /> },
+  { value: 'DUPLICATE',      label: 'Doublon',      color: 'default',   icon: <DuplicateIcon fontSize="small" /> },
+  { value: 'NEED_MORE_INFO', label: 'À spécifier',   color: 'warning',   icon: <NeedInfoIcon fontSize="small" /> },
+  { value: 'REOPENED',       label: 'Réouvert',     color: 'error',     icon: <ReopenedIcon fontSize="small" /> },
+];
+
+/**
+ * Colonnes kanban pour les issues (les terminaux à droite).
+ */
+export const ISSUE_KANBAN_STATUS_OPTIONS = [
+  { value: 'OPEN',           label: 'Nouveau' },
+  { value: 'NEED_MORE_INFO', label: 'À spécifier' },
+  { value: 'TRIAGED',        label: 'À faire' },
+  { value: 'IN_PROGRESS',    label: 'En cours' },
+  { value: 'IN_REVIEW',      label: 'Test en cours' },
+  { value: 'RESOLVED',       label: 'Done' },
+  { value: 'REOPENED',       label: 'Réouvert' },
+  { value: 'CLOSED',         label: 'Fermé' },
+  { value: 'WONT_FIX',       label: 'Annulé' },
+  { value: 'DUPLICATE',      label: 'Doublon' },
+];
+
+/**
+ * Retourne les infos d'affichage d'un statut d'issue.
+ * Accepte les valeurs backend telles quelles (OPEN, IN_PROGRESS…).
+ */
+export const getIssueStatusInfo = (status) => {
+  if (!status) {
+    return { label: 'Aucun statut', color: 'default', icon: <CancelIcon fontSize="small" /> };
+  }
+  const upper = status.toUpperCase().replace(/-/g, '_');
+  return (
+    ISSUE_STATUS_OPTIONS.find((opt) => opt.value === upper) || {
+      label: status,
+      color: 'default',
+      icon: <AssignmentIcon fontSize="small" />,
+    }
+  );
+};
+
+/**
+ * Retourne les infos de statut selon le type d'élément (TASK ou ISSUE).
+ */
+export const getStatusInfo = (item) =>
+  isIssue(item) ? getIssueStatusInfo(item?.status) : getTaskStatusInfo(item?.status);
+
+/**
+ * Retourne les options de statut selon le type d'élément.
+ */
+export const getStatusOptions = (item) =>
+  isIssue(item) ? ISSUE_STATUS_OPTIONS : TASK_STATUS_OPTIONS;
