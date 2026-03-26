@@ -43,7 +43,6 @@ import { toDateInputValue, fromDateInputValue } from '../../utils/dateUtils';
 
 const STATUS_META = {
   'todo':        { label: 'À faire',           color: 'secondary' },
-  'pending':     { label: 'En attente',         color: 'warning'   },
   'in-progress': { label: 'En cours',           color: 'info'      },
   'to-study':    { label: 'À étudier',          color: 'default'   },
   'done':        { label: 'Terminé',            color: 'success'   },
@@ -53,9 +52,9 @@ const STATUS_META = {
 };
 
 const getStatusMeta = (status) =>
-  STATUS_META[(status || '').toLowerCase()] || { label: status || '—', color: 'default' };
+  STATUS_META[normalizeStatusValue(status)] || { label: status || '—', color: 'default' };
 
-const ACTIVE_STATUSES = new Set(['todo', 'in-progress', 'to-study', 'to-test', 'testing', 'pending']);
+const ACTIVE_STATUSES = new Set(['todo', 'in-progress', 'to-study', 'to-test', 'testing']);
 
 const ACTIVE_ISSUE_STATUSES = new Set(['OPEN', 'TRIAGED', 'IN_PROGRESS', 'IN_REVIEW', 'REOPENED', 'NEED_MORE_INFO']);
 
@@ -69,10 +68,10 @@ const ISSUE_SEVERITY_META = {
 const getIssueSeverityMeta = (severity) =>
   ISSUE_SEVERITY_META[(severity || '').toUpperCase()] || { label: severity || '—', color: 'default' };
 
-const STATUS_ORDER = { 'in-progress': 0, 'testing': 1, 'to-test': 2, 'todo': 3, 'to-study': 4, 'pending': 5 };
+const STATUS_ORDER = { 'in-progress': 0, 'testing': 1, 'to-test': 2, 'todo': 3, 'to-study': 4 };
 const sortByStatus = (a, b) => {
-  const orderA = STATUS_ORDER[(a.status || '').toLowerCase()] ?? 99;
-  const orderB = STATUS_ORDER[(b.status || '').toLowerCase()] ?? 99;
+  const orderA = STATUS_ORDER[normalizeStatusValue(a.status)] ?? 99;
+  const orderB = STATUS_ORDER[normalizeStatusValue(b.status)] ?? 99;
   return orderA - orderB;
 };
 
@@ -298,7 +297,7 @@ const OccupationMap = ({ persons = [], projects = [] }) => {
       .map((person, i) => {
         const personTasks = taskQueries[i]?.data || [];
         const activeTasks = personTasks
-          .filter(t => ACTIVE_STATUSES.has((t.status || '').toLowerCase()))
+          .filter(t => ACTIVE_STATUSES.has(normalizeStatusValue(t.status)))
           .sort(sortByStatus);
         const personIssues = issueQueries[i]?.data || [];
         const activeIssues = personIssues
