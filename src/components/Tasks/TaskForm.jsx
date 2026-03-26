@@ -26,8 +26,9 @@ import {
   Assignment as AssignmentIcon,
   CalendarToday as CalendarIcon,
   Person as PersonIcon,
+  BugReport as BugReportIcon,
 } from '@mui/icons-material';
-import { TASK_STATUS_OPTIONS, getTaskStatusInfo } from '../../models/task.model';
+import { TASK_STATUS_OPTIONS, ISSUE_STATUS_OPTIONS, getTaskStatusInfo, getIssueStatusInfo, isIssue } from '../../models/task.model';
 import AbstractEntityEditor from '../Common/AbstractEntityEditor';
 
 /**
@@ -45,6 +46,9 @@ const TaskForm = ({
   persons,
 }) => {
   const theme = useTheme();
+  const itemIsIssue = isIssue(editingTask);
+  const statusOptions = itemIsIssue ? ISSUE_STATUS_OPTIONS : TASK_STATUS_OPTIONS.filter((o) => o.value !== 'no-status');
+  const getStatusInfo = itemIsIssue ? getIssueStatusInfo : getTaskStatusInfo;
 
   const handleFieldChange = (field, value) => {
     onFormChange({ ...formData, [field]: value });
@@ -56,21 +60,62 @@ const TaskForm = ({
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{ sx: { borderRadius: 3 } }}
+      PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden', maxHeight: '90vh', display: 'flex', flexDirection: 'column' } }}
     >
+      {/* Bandeau coloré selon le type */}
+      <Box
+        sx={{
+          height: 6,
+          background: itemIsIssue
+            ? `linear-gradient(90deg, ${theme.palette.error.main}, ${theme.palette.warning.main})`
+            : `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.info.main})`,
+        }}
+      />
+
       <DialogTitle sx={{ pb: 1 }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="h5" fontWeight={700}>
-            {editingTask ? 'Modifier la tâche' : 'Nouvelle tâche'}
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                backgroundColor: itemIsIssue
+                  ? alpha(theme.palette.error.main, 0.12)
+                  : alpha(theme.palette.primary.main, 0.12),
+                color: itemIsIssue ? theme.palette.error.main : theme.palette.primary.main,
+              }}
+            >
+              {itemIsIssue ? <BugReportIcon fontSize="small" /> : <AssignmentIcon fontSize="small" />}
+            </Box>
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="h5" fontWeight={700}>
+                  {itemIsIssue
+                    ? (editingTask ? "Modifier l'issue" : 'Nouvelle issue')
+                    : (editingTask ? 'Modifier la tâche' : 'Nouvelle tâche')}
+                </Typography>
+                <Chip
+                  label={itemIsIssue ? 'Issue' : 'Tâche'}
+                  size="small"
+                  color={itemIsIssue ? 'error' : 'primary'}
+                  variant="outlined"
+                  sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+                />
+              </Stack>
+            </Box>
+          </Stack>
           <IconButton onClick={onClose} size="small">
             <CloseIcon />
           </IconButton>
         </Stack>
       </DialogTitle>
 
-      <form onSubmit={onSubmit}>
-        <DialogContent dividers sx={{ py: 3 }}>
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+        <DialogContent dividers sx={{ py: 3, overflowY: 'auto', flex: 1 }}>
           <Stack spacing={3}>
             {/* Titre */}
             <TextField
@@ -91,11 +136,11 @@ const TaskForm = ({
                   onChange={(e) => handleFieldChange('status', e.target.value)}
                   label="Statut"
                   renderValue={(value) => {
-                    const info = getTaskStatusInfo(value);
+                    const info = getStatusInfo(value);
                     return <Chip icon={info.icon} label={info.label} color={info.color} size="small" />;
                   }}
                 >
-                  {TASK_STATUS_OPTIONS.filter((o) => o.value !== 'no-status').map((option) => (
+                  {statusOptions.map((option) => (
                     <MenuItem key={option.value} value={option.value}>
                       <Chip icon={option.icon} label={option.label} color={option.color} size="small" />
                     </MenuItem>
@@ -241,8 +286,21 @@ const TaskForm = ({
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={onClose} variant="outlined" size="large">Annuler</Button>
-          <Button type="submit" variant="contained" size="large" startIcon={editingTask ? <EditIcon /> : <AddIcon />}>
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            size="large"
+            color={itemIsIssue ? 'error' : 'primary'}
+          >
+            Annuler
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            color={itemIsIssue ? 'error' : 'primary'}
+            startIcon={editingTask ? <EditIcon /> : <AddIcon />}
+          >
             {editingTask ? 'Mettre à jour' : 'Créer'}
           </Button>
         </DialogActions>

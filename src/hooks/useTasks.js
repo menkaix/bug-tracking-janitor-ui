@@ -7,7 +7,7 @@ import issueService from '../services/issue.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import backlogService from '../services/backlog.service';
-import { EMPTY_TASK_FORM } from '../models/task.model';
+import { EMPTY_TASK_FORM, isIssue, normalizeStatusValue } from '../models/task.model';
 import { toDateInputValue, fromDateInputValue } from '../utils/dateUtils';
 import { useConfirm } from './useConfirm';
 
@@ -217,7 +217,12 @@ export const useTasks = () => {
 
   // Édition inline (projet, assignés) — mise à jour optimiste partagée
   const inlineEditMutation = useMutation({
-    mutationFn: ({ taskId, fullTask }) => taskService.updateTask(taskId, fullTask),
+    mutationFn: ({ taskId, fullTask }) => {
+      const item = tasks.find((t) => t.id === taskId);
+      return item?.entityType === 'ISSUE'
+        ? issueService.updateIssue(taskId, fullTask)
+        : taskService.updateTask(taskId, fullTask);
+    },
     onMutate: async ({ taskId, partialUpdate, currentQueryKey }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
       const previous = queryClient.getQueryData(currentQueryKey);
@@ -233,9 +238,14 @@ export const useTasks = () => {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
-  // Suppression d'une tâche
+  // Suppression d'une tâche ou d'une issue
   const deleteMutation = useMutation({
-    mutationFn: (id) => taskService.deleteTask(id),
+    mutationFn: (id) => {
+      const item = tasks.find((t) => t.id === id);
+      return item?.entityType === 'ISSUE'
+        ? issueService.deleteIssue(id)
+        : taskService.deleteTask(id);
+    },
     onSuccess: () => {
       if (tasks.length === 1 && currentPage > 0) setCurrentPage((p) => p - 1);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -243,13 +253,16 @@ export const useTasks = () => {
     onError: () => enqueueSnackbar('Erreur lors de la suppression de la tâche', { variant: 'error' }),
   });
 
-  // Création / mise à jour d'une tâche (formulaire)
+  // Création / mise à jour d'une tâche ou d'une issue (formulaire)
   const saveMutation = useMutation({
     mutationFn: async ({ id, taskData, comments, links }) => {
+      const isIssueItem = editingTask?.entityType === 'ISSUE';
       let result;
       if (id) {
-        result = await taskService.updateTask(id, taskData);
-        if (result.success) {
+        result = isIssueItem
+          ? await issueService.updateIssue(id, taskData)
+          : await taskService.updateTask(id, taskData);
+        if (result.success && !isIssueItem) {
           await backlogService.patchEntity('tasks', id, { comments, links });
         }
       } else {
@@ -300,7 +313,10 @@ export const useTasks = () => {
           if (task) {
             const current = task.assignees || [];
             if (!current.includes(email)) {
-              return taskService.updateTask(id, { ...task, assignees: [...current, email] });
+              const updated = { ...task, assignees: [...current, email] };
+              return task.entityType === 'ISSUE'
+                ? issueService.updateIssue(id, updated)
+                : taskService.updateTask(id, updated);
             }
           }
         })
@@ -465,7 +481,7 @@ export const useTasks = () => {
       title: task.title || '',
       description: task.description || '',
       projectId: task.projectId || '',
-      status: task.status || 'todo',
+      status: isIssue(task) ? (task.status || 'OPEN') : (normalizeStatusValue(task.status) || 'todo'),
       estimate: task.estimate || '',
       trackingReference: task.trackingReference || '',
       plannedStart: toDateInputValue(task.plannedStart),
