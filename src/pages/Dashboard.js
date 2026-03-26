@@ -1071,7 +1071,7 @@ const Dashboard = () => {
             <OccupationCalendar tasks={allTasks} persons={allPersons} onTaskClick={handleTaskClick} />
           )}
           {occupationSubTab === 1 && (
-            <OccupationMap persons={allPersons} projects={allProjects} onTaskClick={handleTaskClick} />
+            <OccupationMap persons={allPersons} projects={allProjects} />
           )}
         </Box>
       )}

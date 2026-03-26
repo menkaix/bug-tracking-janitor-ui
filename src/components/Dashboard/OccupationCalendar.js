@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import {
   Box,
   Paper,
@@ -21,9 +22,23 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Today as TodayIcon,
+  BugReport as BugIcon,
 } from '@mui/icons-material';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isWeekend, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, isValid } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import issueService from '../../services/issue.service';
+
+const ACTIVE_ISSUE_STATUSES = new Set(['OPEN', 'TRIAGED', 'IN_PROGRESS', 'IN_REVIEW', 'REOPENED', 'NEED_MORE_INFO']);
+
+const ISSUE_SEVERITY_COLOR = {
+  'CRITICAL': 'error',
+  'HIGH':     'error',
+  'MEDIUM':   'warning',
+  'LOW':      'info',
+  'INFO':     'default',
+};
+const getIssueSeverityColor = (severity) =>
+  ISSUE_SEVERITY_COLOR[(severity || '').toUpperCase()] || 'default';
 
 // Fonction pure extraite du composant pour éviter sa recréation à chaque render
 const getTasksForDay = (personTasks, day) => {
@@ -43,6 +58,24 @@ const getTasksForDay = (personTasks, day) => {
       }
     }
     return isSameDay(checkDay, taskStart);
+  });
+};
+
+const getIssuesForDay = (personIssues, day) => {
+  const checkDay = new Date(day);
+  checkDay.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return personIssues.filter(issue => {
+    if (issue.dueDate) {
+      const dueDate = new Date(issue.dueDate);
+      if (isValid(dueDate)) {
+        dueDate.setHours(0, 0, 0, 0);
+        return isSameDay(checkDay, dueDate);
+      }
+    }
+    // Issues sans date d'échéance : afficher aujourd'hui
+    return isSameDay(checkDay, today);
   });
 };
 
@@ -72,6 +105,19 @@ const OccupationCalendar = ({ tasks = [], persons = [], onTaskClick }) => {
     setCurrentDate(new Date());
   };
 
+  // Récupère les issues de chaque personne
+  const issueQueries = useQueries({
+    queries: persons.map(person => ({
+      queryKey: ['issues', 'by-assignee', person.email],
+      queryFn: () => issueService.getIssuesByAssignee(person.email),
+      enabled: !!person.email,
+      staleTime: 5 * 60 * 1000,
+      select: (result) => result.success
+        ? (result.data || []).filter(issue => ACTIVE_ISSUE_STATUSES.has((issue.status || '').toUpperCase()))
+        : [],
+    })),
+  });
+
   // Generate days for the header
   const days = useMemo(() => {
     let start, end;
@@ -85,20 +131,22 @@ const OccupationCalendar = ({ tasks = [], persons = [], onTaskClick }) => {
     return eachDayOfInterval({ start, end });
   }, [currentDate, viewMode]);
 
-  // Process data to map persons to their tasks for the current view
+  // Process data to map persons to their tasks and issues for the current view
   const rows = useMemo(() => {
-    return persons.map(person => {
+    return persons.map((person, i) => {
       const personTasks = tasks.filter(task => {
         if (!task.assignees || task.assignees.length === 0) return false;
         return task.assignees.map(s => s.toLowerCase()).includes(person.email?.toLowerCase());
       });
+      const personIssues = issueQueries[i]?.data || [];
 
       return {
         ...person,
         tasks: personTasks,
+        issues: personIssues,
       };
     }).sort((a, b) => (a.firstName || '').localeCompare(b.firstName || ''));
-  }, [persons, tasks]);
+  }, [persons, tasks, issueQueries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getTaskStatusColor = (status) => {
     const s = (status || '').toLowerCase();
@@ -215,6 +263,7 @@ const OccupationCalendar = ({ tasks = [], persons = [], onTaskClick }) => {
                   </TableCell>
                   {days.map(day => {
                     const dayTasks = getTasksForDay(person.tasks, day);
+                    const dayIssues = getIssuesForDay(person.issues, day);
                     const isWknd = isWeekend(day);
                     return (
                       <TableCell
@@ -245,6 +294,30 @@ const OccupationCalendar = ({ tasks = [], persons = [], onTaskClick }) => {
                                   fontSize: '0.65rem',
                                   width: '100%',
                                   cursor: 'pointer',
+                                  '& .MuiChip-label': { px: 0.5 }
+                                }}
+                              />
+                            </Tooltip>
+                          ))}
+                          {dayIssues.map(issue => (
+                            <Tooltip key={issue.id} title={
+                              <Box>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{issue.title}</Typography>
+                                {issue.severity && <Typography variant="caption" display="block">Sévérité : {issue.severity}</Typography>}
+                                {issue.type && <Typography variant="caption" display="block">Type : {issue.type}</Typography>}
+                                <Typography variant="caption" display="block">Statut : {issue.status}</Typography>
+                              </Box>
+                            }>
+                              <Chip
+                                icon={<BugIcon sx={{ fontSize: '0.7rem !important' }} />}
+                                label={issue.title?.length > 10 ? `${issue.title.slice(0, 10)}…` : issue.title}
+                                size="small"
+                                color={getIssueSeverityColor(issue.severity)}
+                                variant="outlined"
+                                sx={{
+                                  height: 20,
+                                  fontSize: '0.65rem',
+                                  width: '100%',
                                   '& .MuiChip-label': { px: 0.5 }
                                 }}
                               />
