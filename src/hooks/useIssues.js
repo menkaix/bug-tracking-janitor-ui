@@ -49,6 +49,9 @@ export const useIssues = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
 
+  // ── Sélection ──
+  const [selectedIssues, setSelectedIssues] = useState([]);
+
   // ── Formulaire / modales ──
   const [showModal, setShowModal] = useState(false);
   const [editingIssue, setEditingIssue] = useState(null);
@@ -263,6 +266,49 @@ export const useIssues = () => {
     statusMutation.mutate({ issueId, status });
   };
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids) => Promise.all(ids.map((id) => issueService.deleteIssue(id))),
+    onSuccess: (_, ids) => {
+      enqueueSnackbar(`${ids.length} issue(s) supprimée(s)`, { variant: 'success' });
+      setSelectedIssues([]);
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: () => {
+      enqueueSnackbar('Erreur lors de la suppression en masse', { variant: 'error' });
+    },
+  });
+
+  const bulkStatusMutation = useMutation({
+    mutationFn: ({ ids, status }) =>
+      Promise.all(ids.map((id) => issueService.updateIssueStatus(id, status))),
+    onSuccess: (_, { ids }) => {
+      enqueueSnackbar(`Statut mis à jour pour ${ids.length} issue(s)`, { variant: 'success' });
+      setSelectedIssues([]);
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: () => {
+      enqueueSnackbar('Erreur lors du changement de statut en masse', { variant: 'error' });
+    },
+  });
+
+  const bulkProjectMutation = useMutation({
+    mutationFn: ({ ids, projectId }) =>
+      Promise.all(
+        ids.map((id) => {
+          const issue = allIssues.find((i) => i.id === id);
+          return issueService.updateIssue(id, { ...issue, projectId });
+        })
+      ),
+    onSuccess: (_, { ids }) => {
+      enqueueSnackbar(`Projet mis à jour pour ${ids.length} issue(s)`, { variant: 'success' });
+      setSelectedIssues([]);
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
+    onError: () => {
+      enqueueSnackbar('Erreur lors du changement de projet en masse', { variant: 'error' });
+    },
+  });
+
   const assignMutation = useMutation({
     mutationFn: async ({ issueId, email }) => {
       const result = await issueService.addAssignee(issueId, email);
@@ -294,6 +340,42 @@ export const useIssues = () => {
     },
     onError: (error) => enqueueSnackbar(error.message || 'Erreur lors du retrait', { variant: 'error' }),
   });
+
+  const isSelected = (id) => selectedIssues.includes(id);
+
+  const handleSelectIssue = (id) => {
+    setSelectedIssues((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIssues(filteredIssues.map((i) => i.id));
+    } else {
+      setSelectedIssues([]);
+    }
+  };
+
+  const handleClearSelection = () => setSelectedIssues([]);
+
+  const handleBulkDelete = async () => {
+    const ok = await confirm({
+      title: `Supprimer ${selectedIssues.length} issue(s) ?`,
+      description: 'Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+    });
+    if (!ok) return;
+    bulkDeleteMutation.mutate(selectedIssues);
+  };
+
+  const handleBulkStatusChange = (status) => {
+    bulkStatusMutation.mutate({ ids: selectedIssues, status });
+  };
+
+  const handleBulkProjectChange = (projectId) => {
+    bulkProjectMutation.mutate({ ids: selectedIssues, projectId });
+  };
 
   const handleAssignPerson = (issueId, email) => {
     assignMutation.mutate({ issueId, email });
@@ -357,6 +439,18 @@ export const useIssues = () => {
     statusMutation,
     assignMutation,
     unassignMutation,
+
+    // Selection
+    selectedIssues,
+    isSelected,
+    handleSelectIssue,
+    handleSelectAll,
+    handleClearSelection,
+
+    // Bulk handlers
+    handleBulkDelete,
+    handleBulkStatusChange,
+    handleBulkProjectChange,
 
     // Handlers
     handleCreateClick,

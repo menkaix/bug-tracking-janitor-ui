@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Container,
@@ -29,6 +30,7 @@ import {
 import {
   Add as AddIcon,
   BugReport as BugReportIcon,
+  ChatBubbleOutline as CommentIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   Error as ErrorIcon,
@@ -39,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { useIssues } from '../hooks/useIssues';
 import { ISSUE_STATUS_OPTIONS } from '../models/task.model';
+import IssueBulkActions from '../components/Issues/IssueBulkActions';
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
@@ -440,6 +443,15 @@ const IssuesPage = () => {
     handleSubmit,
     handleDelete,
     handleStatusChange,
+
+    selectedIssues,
+    isSelected,
+    handleSelectIssue,
+    handleSelectAll,
+    handleClearSelection,
+    handleBulkDelete,
+    handleBulkStatusChange,
+    handleBulkProjectChange,
   } = useIssues();
 
   const projects = projectsQuery.data || [];
@@ -560,6 +572,16 @@ const IssuesPage = () => {
         </Grid>
       </Paper>
 
+      {/* ── Bulk Actions Bar ── */}
+      <IssueBulkActions
+        selectedCount={selectedIssues.length}
+        projects={projects}
+        onClearSelection={handleClearSelection}
+        onBulkDelete={handleBulkDelete}
+        onBulkStatusChange={handleBulkStatusChange}
+        onBulkProjectChange={handleBulkProjectChange}
+      />
+
       {/* ── Table ── */}
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -574,6 +596,14 @@ const IssuesPage = () => {
           <Table size="small">
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 700, backgroundColor: 'action.hover' } }}>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    indeterminate={selectedIssues.length > 0 && selectedIssues.length < issues.length}
+                    checked={issues.length > 0 && selectedIssues.length === issues.length}
+                    onChange={handleSelectAll}
+                    size="small"
+                  />
+                </TableCell>
                 <TableCell width={40}></TableCell>
                 <TableCell>Titre</TableCell>
                 <TableCell>Sévérité</TableCell>
@@ -587,7 +617,7 @@ const IssuesPage = () => {
             <TableBody>
               {issues.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                     <Typography color="text.secondary">Aucune issue trouvée</Typography>
                   </TableCell>
                 </TableRow>
@@ -596,8 +626,17 @@ const IssuesPage = () => {
                   <TableRow
                     key={issue.id}
                     hover
+                    selected={isSelected(issue.id)}
                     sx={{ '&:last-child td': { borderBottom: 0 } }}
                   >
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={isSelected(issue.id)}
+                        onChange={() => handleSelectIssue(issue.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        size="small"
+                      />
+                    </TableCell>
                     <TableCell>
                       <TypeIcon type={issue.type} />
                     </TableCell>
@@ -618,6 +657,14 @@ const IssuesPage = () => {
                         >
                           {issue.description}
                         </Typography>
+                      )}
+                      {issue.comments?.length > 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                          <CommentIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                          <Typography variant="caption" color="text.disabled">
+                            {issue.comments.length}
+                          </Typography>
+                        </Box>
                       )}
                     </TableCell>
                     <TableCell>

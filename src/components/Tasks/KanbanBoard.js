@@ -41,6 +41,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { formatDate } from '../../utils/dateUtils';
 import { KANBAN_STATUS_OPTIONS, ISSUE_KANBAN_STATUS_OPTIONS, isIssue, ISSUE_SEVERITY_CONFIG, ISSUE_TYPE_CONFIG, normalizeStatusValue } from '../../models/task.model';
 import { resolveAssigneeNames } from '../../utils/assigneeUtils';
+import IssueDetailsPanel from '../Issues/IssueDetailsPanel';
 
 const SEVERITY_BORDER = {
   CRITICAL: '#d32f2f',
@@ -211,6 +212,13 @@ const TaskCard = React.memo(({ task, persons, onEdit, onDelete, onStatusChange, 
               </Tooltip>
             </Stack>
           </Stack>
+
+          {/* Commentaires et liens (issues uniquement) */}
+          {issueItem && (
+            <Box onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+              <IssueDetailsPanel issueId={task.id} />
+            </Box>
+          )}
 
           {/* Sélecteur de statut */}
           <Box

@@ -30,6 +30,7 @@ import {
 import { TASK_STATUS_OPTIONS, ISSUE_STATUS_OPTIONS, getTaskStatusInfo, getIssueStatusInfo, isIssue, ISSUE_SEVERITY_CONFIG, ISSUE_TYPE_CONFIG } from '../../models/task.model';
 import { resolveAssigneeNames } from '../../utils/assigneeUtils';
 import { formatDate } from '../../utils/dateUtils';
+import IssueDetailsPanel from '../Issues/IssueDetailsPanel';
 
 /**
  * Table des tâches (vue liste).
@@ -134,6 +135,7 @@ const TaskList = ({
                   {task.trackingReference && (
                     <Typography variant="caption" color="text.secondary">{task.trackingReference}</Typography>
                   )}
+                  {isIssue(task) && <IssueDetailsPanel issueId={task.id} />}
                 </TableCell>
 
                 <TableCell>

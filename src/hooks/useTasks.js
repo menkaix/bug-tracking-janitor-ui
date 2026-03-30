@@ -489,7 +489,9 @@ export const useTasks = () => {
       assignees: task.assignees || [],
     });
     setShowModal(true);
-    const result = await backlogService.getEntity('tasks', task.id);
+    const result = isIssue(task)
+      ? await issueService.getIssueById(task.id)
+      : await backlogService.getEntity('tasks', task.id);
     if (result.success) {
       setFormData((prev) => ({ ...prev, comments: result.data.comments || [], links: result.data.links || [] }));
     }
