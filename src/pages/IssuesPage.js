@@ -677,9 +677,21 @@ const IssuesPage = () => {
                       <TypeChip type={issue.type} />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {issue.projectId || '—'}
-                      </Typography>
+                      {(() => {
+                        const proj = projects.find((p) => p.id === issue.projectId);
+                        return proj ? (
+                          <Typography variant="body2">
+                            <Box component="span" sx={{ fontWeight: 600, mr: 0.5 }}>
+                              {proj.projectCode || proj.code}
+                            </Box>
+                            <Box component="span" color="text.secondary">
+                              {proj.projectName || proj.name}
+                            </Box>
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">—</Typography>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
