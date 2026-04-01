@@ -47,10 +47,12 @@ import {
   Error as ErrorIcon,
   Help as HelpIcon,
   Security as SecurityIcon,
+  Download as DownloadIcon,
   Speed as SpeedIcon,
   Tune as TuneIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
+import * as XLSX from 'xlsx';
 import { useIssues } from '../hooks/useIssues';
 import { ISSUE_STATUS_OPTIONS } from '../models/task.model';
 import IssueBulkActions from '../components/Issues/IssueBulkActions';
@@ -606,6 +608,41 @@ const IssuesPage = () => {
   const openCount = allIssues.filter((i) => i.status === 'OPEN' || i.status === 'REOPENED').length;
   const criticalCount = allIssues.filter((i) => i.severity === 'CRITICAL').length;
 
+  const handleExportExcel = () => {
+    const rows = issues.map((issue) => {
+      const proj = projects.find((p) => p.id === issue.projectId);
+      return {
+        Titre: issue.title || '',
+        Type: TYPE_CONFIG[issue.type]?.label || issue.type || '',
+        Sévérité: SEVERITY_CONFIG[issue.severity]?.label || issue.severity || '',
+        Statut: STATUS_CONFIG[issue.status]?.label || issue.status || '',
+        Projet: proj ? `${proj.projectCode || proj.code} - ${proj.projectName || proj.name}` : (issue.projectId || ''),
+        Environnement: issue.environment || '',
+        Plateforme: issue.platform || '',
+        Composant: issue.component || '',
+        Rapporteur: issue.reporter || '',
+        Priorité: issue.priority || '',
+        'Version affectée': issue.affectedVersion || '',
+        'Corrigé en version': issue.fixedInVersion || '',
+        Description: issue.description || '',
+        'Comportement actuel': issue.actualBehavior || '',
+        'Comportement attendu': issue.expectedBehavior || '',
+        Commentaires: (issue.comments || []).length,
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 50 }, { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 30 },
+      { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 12 },
+      { wch: 16 }, { wch: 18 }, { wch: 40 }, { wch: 40 }, { wch: 40 }, { wch: 12 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Issues');
+    const date = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `issues-${date}.xlsx`);
+  };
+
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
       {/* ── Header ── */}
@@ -640,6 +677,17 @@ const IssuesPage = () => {
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1 }}>
+          <Tooltip title={`Exporter ${issues.length} issue(s) filtrées`}>
+            <Button
+              variant="outlined"
+              color="success"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportExcel}
+              disabled={issues.length === 0}
+            >
+              Export Excel
+            </Button>
+          </Tooltip>
           <Button
             variant="outlined"
             color="error"
