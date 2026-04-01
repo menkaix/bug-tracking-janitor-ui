@@ -757,7 +757,7 @@ const IssuesPage = () => {
                 <TableCell>Statut</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Projet</TableCell>
-                <TableCell>Rapporteur</TableCell>
+                <TableCell>Environnement</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -842,7 +842,7 @@ const IssuesPage = () => {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {issue.reporter || '—'}
+                        {issue.environment || '—'}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
