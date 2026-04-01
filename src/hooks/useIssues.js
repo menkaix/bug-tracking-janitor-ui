@@ -230,6 +230,7 @@ export const useIssues = () => {
       labels: issue.labels || [],
       priority: issue.priority || 'NORMAL',
       assignees: issue.assignees || [],
+      comments: issue.comments || [],
     });
     setShowReportForm(false);
     setShowModal(true);

@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
+  Avatar,
   Box,
   Button,
   Checkbox,
@@ -10,22 +12,31 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   Grid,
   IconButton,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
+  Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
+  alpha,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -37,6 +48,7 @@ import {
   Help as HelpIcon,
   Security as SecurityIcon,
   Speed as SpeedIcon,
+  Tune as TuneIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useIssues } from '../hooks/useIssues';
@@ -132,6 +144,100 @@ const TypeChip = ({ type }) => {
   return <Chip label={config.label} color={config.color} size="small" variant="outlined" />;
 };
 
+// ─── Comments tab (read-only, newest first) ───────────────────────────────────
+
+const IssueCommentsTab = ({ comments = [] }) => {
+  const theme = useTheme();
+  const sorted = [...comments].sort((a, b) => new Date(b.createDate) - new Date(a.createDate));
+
+  const initials = (author) =>
+    (author || '').split(/[\s-_]/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+
+  if (sorted.length === 0) {
+    return (
+      <Box sx={{ py: 6, textAlign: 'center' }}>
+        <CommentIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+        <Typography color="text.secondary">Aucun commentaire</Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <List disablePadding>
+      {sorted.map((c, idx) => (
+        <React.Fragment key={idx}>
+          <ListItem alignItems="flex-start" sx={{ px: 0, py: 1.5 }}>
+            <Avatar
+              sx={{
+                width: 32,
+                height: 32,
+                mr: 1.5,
+                mt: 0.5,
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                bgcolor: alpha(theme.palette.primary.main, 0.15),
+                color: 'primary.main',
+                flexShrink: 0,
+              }}
+            >
+              {initials(c.author)}
+            </Avatar>
+            <ListItemText
+              primary={
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="subtitle2" fontWeight={700}>{c.author}</Typography>
+                  {c.createDate && (
+                    <Typography variant="caption" color="text.disabled">
+                      {new Date(c.createDate?.$date ?? c.createDate).toLocaleString('fr-FR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      })}
+                    </Typography>
+                  )}
+                </Stack>
+              }
+              secondary={
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'block',
+                    mt: 0.5,
+                    fontSize: '0.85rem',
+                    color: 'text.secondary',
+                    '& p': { m: 0 },
+                    '& p + p': { mt: 0.5 },
+                    '& ul, & ol': { pl: 2, my: 0.25 },
+                    '& li': { mb: 0 },
+                    '& strong': { fontWeight: 600, color: 'text.primary' },
+                    '& code': {
+                      fontFamily: 'monospace',
+                      fontSize: '0.8em',
+                      bgcolor: 'action.hover',
+                      px: 0.5,
+                      borderRadius: 0.5,
+                    },
+                    '& a': { color: 'primary.main' },
+                    '& blockquote': {
+                      borderLeft: '3px solid',
+                      borderColor: 'divider',
+                      pl: 1,
+                      ml: 0,
+                      color: 'text.disabled',
+                    },
+                  }}
+                >
+                  <ReactMarkdown>{c.text}</ReactMarkdown>
+                </Box>
+              }
+            />
+          </ListItem>
+          {idx < sorted.length - 1 && <Divider />}
+        </React.Fragment>
+      ))}
+    </List>
+  );
+};
+
 // ─── IssueForm Dialog ─────────────────────────────────────────────────────────
 
 const IssueFormDialog = ({
@@ -143,220 +249,261 @@ const IssueFormDialog = ({
   editingIssue,
   isSaving,
   projects,
-  statusesQuery,
 }) => {
+  const [tab, setTab] = useState(0);
   const isEditing = Boolean(editingIssue);
   const showReproSteps = formData.type === 'BUG' || formData.type === 'REGRESSION';
+  const comments = formData.comments || [];
+
+  // Reset tab to 0 when dialog opens/closes
+  React.useEffect(() => { if (!open) setTab(0); }, [open]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pb: 0 }}>
         <BugReportIcon color="error" />
         {isEditing ? "Modifier l'issue" : 'Nouvelle issue'}
       </DialogTitle>
+
+      {isEditing && (
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}
+          textColor="primary"
+          indicatorColor="primary"
+        >
+          <Tab
+            icon={<TuneIcon fontSize="small" />}
+            iconPosition="start"
+            label="Détails"
+            sx={{ textTransform: 'none', minHeight: 44 }}
+          />
+          <Tab
+            icon={<CommentIcon fontSize="small" />}
+            iconPosition="start"
+            label={
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <span>Commentaires</span>
+                {comments.length > 0 && (
+                  <Chip label={comments.length} size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />
+                )}
+              </Stack>
+            }
+            sx={{ textTransform: 'none', minHeight: 44 }}
+          />
+        </Tabs>
+      )}
+
       <form onSubmit={onSubmit}>
-        <DialogContent dividers>
-          <Grid container spacing={2}>
-            {/* Left column */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Titre"
-                name="title"
-                value={formData.title}
-                onChange={onChange}
-                required
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                label="Description"
-                name="description"
-                value={formData.description}
-                onChange={onChange}
-                multiline
-                rows={3}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Type</InputLabel>
-                <Select name="type" value={formData.type} onChange={onChange} label="Type">
-                  {ALL_TYPES.map((t) => (
-                    <MenuItem key={t} value={t}>
-                      {TYPE_CONFIG[t]?.label || t}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Sévérité</InputLabel>
-                <Select name="severity" value={formData.severity} onChange={onChange} label="Sévérité">
-                  {ALL_SEVERITIES.map((s) => (
-                    <MenuItem key={s} value={s}>
-                      {SEVERITY_CONFIG[s]?.icon} {SEVERITY_CONFIG[s]?.label || s}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Priorité</InputLabel>
-                <Select name="priority" value={formData.priority} onChange={onChange} label="Priorité">
-                  {PRIORITIES.map((p) => (
-                    <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {isEditing && (
+        <DialogContent dividers sx={{ display: tab === 1 ? 'block' : undefined }}>
+
+          {/* ── Onglet Détails ── */}
+          {tab === 0 && (
+            <Grid container spacing={2}>
+              {/* Left column */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  label="Titre"
+                  name="title"
+                  value={formData.title}
+                  onChange={onChange}
+                  required
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Description"
+                  name="description"
+                  value={formData.description}
+                  onChange={onChange}
+                  multiline
+                  rows={3}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
                 <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                  <InputLabel>Statut</InputLabel>
-                  <Select name="status" value={formData.status || 'OPEN'} onChange={onChange} label="Statut">
-                    {ALL_STATUSES.map((s) => (
+                  <InputLabel>Type</InputLabel>
+                  <Select name="type" value={formData.type} onChange={onChange} label="Type">
+                    {ALL_TYPES.map((t) => (
+                      <MenuItem key={t} value={t}>{TYPE_CONFIG[t]?.label || t}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                  <InputLabel>Sévérité</InputLabel>
+                  <Select name="severity" value={formData.severity} onChange={onChange} label="Sévérité">
+                    {ALL_SEVERITIES.map((s) => (
                       <MenuItem key={s} value={s}>
-                        {STATUS_CONFIG[s]?.label || s}
+                        {SEVERITY_CONFIG[s]?.icon} {SEVERITY_CONFIG[s]?.label || s}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
-              )}
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Projet</InputLabel>
-                <Select name="projectId" value={formData.projectId} onChange={onChange} label="Projet">
-                  <MenuItem value=""><em>— Aucun —</em></MenuItem>
-                  {(projects || []).map((p) => (
-                    <MenuItem key={p.id} value={p.id}>
-                      {p.projectName || p.name} ({p.projectCode || p.code})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                  <InputLabel>Priorité</InputLabel>
+                  <Select name="priority" value={formData.priority} onChange={onChange} label="Priorité">
+                    {PRIORITIES.map((p) => (
+                      <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {isEditing && (
+                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                    <InputLabel>Statut</InputLabel>
+                    <Select name="status" value={formData.status || 'OPEN'} onChange={onChange} label="Statut">
+                      {ALL_STATUSES.map((s) => (
+                        <MenuItem key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                  <InputLabel>Projet</InputLabel>
+                  <Select name="projectId" value={formData.projectId} onChange={onChange} label="Projet">
+                    <MenuItem value=""><em>— Aucun —</em></MenuItem>
+                    {(projects || []).map((p) => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {p.projectName || p.name} ({p.projectCode || p.code})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
 
-            {/* Right column */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Rapporteur (email)"
-                name="reporter"
-                value={formData.reporter}
-                onChange={onChange}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                label="Environnement"
-                name="environment"
-                value={formData.environment}
-                onChange={onChange}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                label="Plateforme"
-                name="platform"
-                value={formData.platform}
-                onChange={onChange}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                label="Composant"
-                name="component"
-                value={formData.component}
-                onChange={onChange}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                label="Version affectée"
-                name="affectedVersion"
-                value={formData.affectedVersion}
-                onChange={onChange}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                label="Corrigé en version"
-                name="fixedInVersion"
-                value={formData.fixedInVersion}
-                onChange={onChange}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-            </Grid>
-
-            {/* Full width below */}
-            {showReproSteps && (
-              <Grid size={12}>
+              {/* Right column */}
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
-                  label="Étapes de reproduction"
-                  name="reproductionSteps"
-                  value={formData.reproductionSteps}
+                  label="Rapporteur (email)"
+                  name="reporter"
+                  value={formData.reporter}
                   onChange={onChange}
-                  multiline
-                  rows={4}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Environnement"
+                  name="environment"
+                  value={formData.environment}
+                  onChange={onChange}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Plateforme"
+                  name="platform"
+                  value={formData.platform}
+                  onChange={onChange}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Composant"
+                  name="component"
+                  value={formData.component}
+                  onChange={onChange}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Version affectée"
+                  name="affectedVersion"
+                  value={formData.affectedVersion}
+                  onChange={onChange}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Corrigé en version"
+                  name="fixedInVersion"
+                  value={formData.fixedInVersion}
+                  onChange={onChange}
                   fullWidth
                   size="small"
                   sx={{ mb: 2 }}
                 />
               </Grid>
-            )}
-            <Grid size={12}>
-              <TextField
-                label="Comportement attendu"
-                name="expectedBehavior"
-                value={formData.expectedBehavior}
-                onChange={onChange}
-                multiline
-                rows={2}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
+
+              {/* Full width below */}
+              {showReproSteps && (
+                <Grid size={12}>
+                  <TextField
+                    label="Étapes de reproduction"
+                    name="reproductionSteps"
+                    value={formData.reproductionSteps}
+                    onChange={onChange}
+                    multiline
+                    rows={4}
+                    fullWidth
+                    size="small"
+                    sx={{ mb: 2 }}
+                  />
+                </Grid>
+              )}
+              <Grid size={12}>
+                <TextField
+                  label="Comportement attendu"
+                  name="expectedBehavior"
+                  value={formData.expectedBehavior}
+                  onChange={onChange}
+                  multiline
+                  rows={2}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid size={12}>
+                <TextField
+                  label="Comportement actuel"
+                  name="actualBehavior"
+                  value={formData.actualBehavior}
+                  onChange={onChange}
+                  multiline
+                  rows={2}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid size={12}>
+                <TextField
+                  label="Contournement"
+                  name="workaround"
+                  value={formData.workaround}
+                  onChange={onChange}
+                  multiline
+                  rows={2}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
             </Grid>
-            <Grid size={12}>
-              <TextField
-                label="Comportement actuel"
-                name="actualBehavior"
-                value={formData.actualBehavior}
-                onChange={onChange}
-                multiline
-                rows={2}
-                fullWidth
-                size="small"
-                sx={{ mb: 2 }}
-              />
-            </Grid>
-            <Grid size={12}>
-              <TextField
-                label="Contournement"
-                name="workaround"
-                value={formData.workaround}
-                onChange={onChange}
-                multiline
-                rows={2}
-                fullWidth
-                size="small"
-              />
-            </Grid>
-          </Grid>
+          )}
+
+          {/* ── Onglet Commentaires ── */}
+          {tab === 1 && <IssueCommentsTab comments={comments} />}
+
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={onClose} disabled={isSaving}>Annuler</Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={isSaving || !formData.title}
-            startIcon={isSaving ? <CircularProgress size={16} /> : null}
-          >
-            {isSaving ? 'Enregistrement...' : isEditing ? 'Mettre à jour' : 'Créer'}
-          </Button>
+          {tab === 0 && (
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSaving || !formData.title}
+              startIcon={isSaving ? <CircularProgress size={16} /> : null}
+            >
+              {isSaving ? 'Enregistrement...' : isEditing ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          )}
         </DialogActions>
       </form>
     </Dialog>
