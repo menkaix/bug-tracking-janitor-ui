@@ -833,7 +833,15 @@ const IssuesPage = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      <TypeIcon type={issue.type} />
+                      <Tooltip title={`Copier l'ID : ${issue.id}`}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(issue.id); }}
+                          sx={{ p: 0.5 }}
+                        >
+                          <TypeIcon type={issue.type} />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                     <TableCell sx={{ maxWidth: 320 }}>
                       <Typography variant="body2" fontWeight={600} noWrap>
