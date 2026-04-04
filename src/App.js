@@ -7,8 +7,9 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
 import { queryClient } from './queryClient';
 import { ConfirmProvider } from './hooks/useConfirm';
-import { apiService } from './services/api.service';
+import { apiService, apiClient } from './services/api.service';
 import authService from './services/auth.service';
+import { API_ENDPOINTS } from './config/api.config';
 import logger from './services/logger.service';
 import ApiKeyLogin from './components/ApiKeyLogin';
 import Navbar from './components/Layout/Navbar';
@@ -60,14 +61,37 @@ class ErrorBoundary extends Component {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
+
+  const verifyWithBackend = async () => {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.ME, { _skipErrorHandling: true });
+      const email = response.data?.email;
+      if (email && email.includes('@')) {
+        logger.info('Backend verification successful', { email });
+        return email;
+      }
+      logger.warn('Backend /me returned no valid email', { data: response.data });
+      return null;
+    } catch (err) {
+      logger.warn('Backend /me verification failed', { error: err.message });
+      return null;
+    }
+  };
 
   useEffect(() => {
     logger.info('App initializing - checking authentication');
 
     const unsubscribe = authService.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
-        logger.info('Firebase user authenticated', { email: firebaseUser.email });
-        setIsAuthenticated(true);
+        logger.info('Firebase user detected, verifying with backend', { email: firebaseUser.email });
+        const email = await verifyWithBackend();
+        if (email) {
+          setIsAuthenticated(true);
+        } else {
+          await authService.signOut();
+          setAuthError('Votre compte n\'est pas autorisé à accéder à cette application.');
+        }
         setLoading(false);
         return;
       }
@@ -76,8 +100,15 @@ function App() {
       if (apiService.hasApiKey()) {
         const result = await apiService.testConnection();
         if (result.success) {
-          logger.info('User authenticated via API key');
-          setIsAuthenticated(true);
+          const email = await verifyWithBackend();
+          if (email) {
+            logger.info('User authenticated via API key');
+            setIsAuthenticated(true);
+          } else {
+            logger.warn('API key valid but /me returned no valid email');
+            apiService.clearApiKey();
+            setAuthError('Votre compte n\'est pas autorisé à accéder à cette application.');
+          }
         } else {
           logger.warn('Invalid API key - clearing');
           apiService.clearApiKey();
@@ -91,9 +122,19 @@ function App() {
     return unsubscribe;
   }, []);
 
-  const handleLoginSuccess = () => {
-    logger.info('User logged in successfully');
-    setIsAuthenticated(true);
+  // Uniquement pour le chemin API key — le chemin Firebase passe par onAuthStateChanged
+  const handleLoginSuccess = async () => {
+    setLoading(true);
+    setAuthError(null);
+    const email = await verifyWithBackend();
+    if (email) {
+      logger.info('User logged in and verified successfully');
+      setIsAuthenticated(true);
+    } else {
+      apiService.clearApiKey();
+      setAuthError('Votre compte n\'est pas autorisé à accéder à cette application.');
+    }
+    setLoading(false);
   };
 
   const handleLogout = async () => {
@@ -130,7 +171,7 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <ApiKeyLogin onLoginSuccess={handleLoginSuccess} />
+        <ApiKeyLogin onLoginSuccess={handleLoginSuccess} authError={authError} />
       </ThemeProvider>
     );
   }

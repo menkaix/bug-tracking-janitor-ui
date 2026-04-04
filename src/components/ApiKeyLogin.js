@@ -29,7 +29,7 @@ import logger from '../services/logger.service';
 /**
  * Composant de connexion avec saisie d'API Key - Style Material UI 2025
  */
-const ApiKeyLogin = ({ onLoginSuccess }) => {
+const ApiKeyLogin = ({ onLoginSuccess, authError }) => {
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -42,14 +42,14 @@ const ApiKeyLogin = ({ onLoginSuccess }) => {
     setGoogleLoading(true);
     try {
       await authService.signInWithGoogle();
-      logger.info('Google sign-in successful');
-      onLoginSuccess();
+      // onAuthStateChanged dans App.js prend le relais : vérification /me + setIsAuthenticated
     } catch (err) {
       logger.error('Google sign-in error', { error: err.message });
       setError({ title: 'Connexion Google échouée', detail: err.message });
-    } finally {
       setGoogleLoading(false);
     }
+    // setGoogleLoading(false) volontairement absent en cas de succès :
+    // le composant sera démonté par App.js une fois authentifié
   };
 
   const handleSubmit = async (e) => {
@@ -176,6 +176,14 @@ const ApiKeyLogin = ({ onLoginSuccess }) => {
                 Système de gestion de tâches
               </Typography>
             </Box>
+
+            {/* Erreur d'autorisation backend */}
+            {authError && (
+              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                <AlertTitle>Accès refusé</AlertTitle>
+                {authError}
+              </Alert>
+            )}
 
             {/* Connexion Google */}
             <Button
