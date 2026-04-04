@@ -28,6 +28,7 @@ import {
   Psychology as SkillsIcon,
 } from '@mui/icons-material';
 import { apiService } from '../../services/api.service';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 /**
  * Barre de navigation principale - Style Material UI 2025
@@ -37,6 +38,7 @@ const Navbar = ({ onLogout }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const { email } = useCurrentUser();
 
   const handleLogout = () => {
     apiService.clearApiKey();
@@ -181,27 +183,34 @@ const Navbar = ({ onLogout }) => {
               </Box>
             )}
 
-            {/* Bouton déconnexion desktop */}
+            {/* Email utilisateur + bouton déconnexion desktop */}
             {!isMobile && (
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<LogoutIcon />}
-                onClick={handleLogout}
-                sx={{
-                  borderRadius: 2,
-                  px: 2.5,
-                  py: 1,
-                  fontWeight: 600,
-                  textTransform: 'none',
-                  borderWidth: 2,
-                  '&:hover': {
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {email && (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                    {email}
+                  </Typography>
+                )}
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<LogoutIcon />}
+                  onClick={handleLogout}
+                  sx={{
+                    borderRadius: 2,
+                    px: 2.5,
+                    py: 1,
+                    fontWeight: 600,
+                    textTransform: 'none',
                     borderWidth: 2,
-                  },
-                }}
-              >
-                Déconnexion
-              </Button>
+                    '&:hover': {
+                      borderWidth: 2,
+                    },
+                  }}
+                >
+                  Déconnexion
+                </Button>
+              </Box>
             )}
 
             {/* Menu hamburger mobile */}

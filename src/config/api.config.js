@@ -28,6 +28,7 @@ export const API_ENDPOINTS = {
   FEATURES: '/features',
   SKILLS: '/skill',
   ISSUES: '/issue',
+  ME: '/me',
 };
 
 /**
