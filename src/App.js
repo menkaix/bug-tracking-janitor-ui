@@ -8,6 +8,7 @@ import { SnackbarProvider } from 'notistack';
 import { queryClient } from './queryClient';
 import { ConfirmProvider } from './hooks/useConfirm';
 import { apiService } from './services/api.service';
+import authService from './services/auth.service';
 import logger from './services/logger.service';
 import ApiKeyLogin from './components/ApiKeyLogin';
 import Navbar from './components/Layout/Navbar';
@@ -61,25 +62,33 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Vérifier si une clé API est déjà stockée
-    const checkAuth = async () => {
-      logger.info('App initializing - checking authentication');
+    logger.info('App initializing - checking authentication');
+
+    const unsubscribe = authService.onAuthStateChanged(async (firebaseUser) => {
+      if (firebaseUser) {
+        logger.info('Firebase user authenticated', { email: firebaseUser.email });
+        setIsAuthenticated(true);
+        setLoading(false);
+        return;
+      }
+
+      // Pas d'utilisateur Firebase — fallback API key
       if (apiService.hasApiKey()) {
         const result = await apiService.testConnection();
         if (result.success) {
-          logger.info('User authenticated successfully');
+          logger.info('User authenticated via API key');
           setIsAuthenticated(true);
         } else {
           logger.warn('Invalid API key - clearing');
           apiService.clearApiKey();
         }
       } else {
-        logger.info('No API key found');
+        logger.info('No authentication found');
       }
       setLoading(false);
-    };
+    });
 
-    checkAuth();
+    return unsubscribe;
   }, []);
 
   const handleLoginSuccess = () => {
@@ -87,8 +96,10 @@ function App() {
     setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     logger.info('User logged out');
+    await authService.signOut();
+    apiService.clearApiKey();
     setIsAuthenticated(false);
   };
 

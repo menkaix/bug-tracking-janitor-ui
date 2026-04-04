@@ -2,6 +2,7 @@ import axios from 'axios';
 import { API_CONFIG, STORAGE_KEYS, ERROR_MESSAGES } from '../config/api.config';
 import logger from './logger.service';
 import { networkActivityStore } from './networkActivity';
+import authService from './auth.service';
 
 /**
  * Instance Axios configurée avec l'API key
@@ -24,12 +25,17 @@ const createApiInstance = () => {
     },
   });
 
-  // Intercepteur de requête pour ajouter l'API key
+  // Intercepteur de requête : Firebase token en priorité, API key en fallback
   instance.interceptors.request.use(
-    (config) => {
-      const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || API_CONFIG.DEFAULT_API_KEY;
-      if (apiKey) {
-        config.headers['x-api-key'] = apiKey;
+    async (config) => {
+      const firebaseToken = await authService.getIdToken();
+      if (firebaseToken) {
+        config.headers['Authorization'] = `Bearer ${firebaseToken}`;
+      } else {
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || API_CONFIG.DEFAULT_API_KEY;
+        if (apiKey) {
+          config.headers['x-api-key'] = apiKey;
+        }
       }
 
       // Log de la requête

@@ -12,6 +12,7 @@ import {
   Container,
   InputAdornment,
   IconButton,
+  Divider,
   useTheme,
   alpha,
 } from '@mui/material';
@@ -22,6 +23,7 @@ import {
   BugReport as BugReportIcon,
 } from '@mui/icons-material';
 import { apiService } from '../services/api.service';
+import authService from '../services/auth.service';
 import logger from '../services/logger.service';
 
 /**
@@ -30,9 +32,25 @@ import logger from '../services/logger.service';
 const ApiKeyLogin = ({ onLoginSuccess }) => {
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const theme = useTheme();
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      await authService.signInWithGoogle();
+      logger.info('Google sign-in successful');
+      onLoginSuccess();
+    } catch (err) {
+      logger.error('Google sign-in error', { error: err.message });
+      setError({ title: 'Connexion Google échouée', detail: err.message });
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -159,7 +177,39 @@ const ApiKeyLogin = ({ onLoginSuccess }) => {
               </Typography>
             </Box>
 
-            {/* Formulaire */}
+            {/* Connexion Google */}
+            <Button
+              fullWidth
+              variant="outlined"
+              size="large"
+              onClick={handleGoogleSignIn}
+              disabled={googleLoading || loading}
+              sx={{
+                py: 1.5,
+                mb: 3,
+                fontSize: '1rem',
+                fontWeight: 600,
+                borderRadius: 2,
+                borderColor: 'divider',
+                color: 'text.primary',
+                '&:hover': { borderColor: 'primary.main', backgroundColor: alpha(theme.palette.primary.main, 0.04) },
+              }}
+              startIcon={
+                googleLoading ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <Box component="img" src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" sx={{ width: 20, height: 20 }} />
+                )
+              }
+            >
+              {googleLoading ? 'Connexion en cours...' : 'Se connecter avec Google'}
+            </Button>
+
+            <Divider sx={{ mb: 3 }}>
+              <Typography variant="body2" color="text.secondary">ou avec une clé API</Typography>
+            </Divider>
+
+            {/* Formulaire API key */}
             <Box component="form" onSubmit={handleSubmit} noValidate>
               <TextField
                 fullWidth
