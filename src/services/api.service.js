@@ -84,6 +84,9 @@ const createApiInstance = () => {
       logger.logResponse(method, url, status, error.response?.data);
 
       if (error.response) {
+        if (error.config?._skipErrorHandling) {
+          return Promise.reject(error);
+        }
         switch (error.response.status) {
           case 401:
           case 403:

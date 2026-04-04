@@ -6,10 +6,15 @@ export const useCurrentUser = () => {
   const { data } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
-      const response = await apiClient.get(API_ENDPOINTS.ME);
-      return response.data;
+      try {
+        const response = await apiClient.get(API_ENDPOINTS.ME, { _skipErrorHandling: true });
+        return response.data;
+      } catch {
+        return null;
+      }
     },
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   return { email: data?.email ?? null };
