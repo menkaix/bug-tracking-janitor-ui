@@ -27,7 +27,7 @@ class Logger {
     // Niveau de log basé sur l'environnement
     this.level = this.getLogLevel();
     this.enableConsole = true;
-    this.enableStorage = process.env.NODE_ENV === 'production';
+    this.enableStorage = process.env.NODE_ENV === 'development';
     this.maxStoredLogs = 100;
     this.logs = this.loadLogsFromStorage();
   }

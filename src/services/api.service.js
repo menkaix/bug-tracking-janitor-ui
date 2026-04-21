@@ -32,7 +32,7 @@ const createApiInstance = () => {
       if (firebaseToken) {
         config.headers['Authorization'] = `Bearer ${firebaseToken}`;
       } else {
-        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || API_CONFIG.DEFAULT_API_KEY;
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
         if (apiKey) {
           config.headers['x-api-key'] = apiKey;
         }
