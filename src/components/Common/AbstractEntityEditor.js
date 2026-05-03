@@ -29,6 +29,7 @@ import {
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/dateUtils';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,12 +47,19 @@ const authorInitials = (author) =>
 
 const CommentsPanel = ({ comments = [], onChange }) => {
   const theme = useTheme();
-  const [form, setForm] = useState({ author: '', text: '' });
+  const { email: currentUserEmail } = useCurrentUser();
+  const [form, setForm] = useState({ author: currentUserEmail ?? '', text: '' });
+
+  React.useEffect(() => {
+    if (currentUserEmail) {
+      setForm((f) => (f.author ? f : { ...f, author: currentUserEmail }));
+    }
+  }, [currentUserEmail]);
 
   const handleAdd = () => {
     if (!form.author.trim() || !form.text.trim()) return;
     onChange([...comments, { author: form.author.trim(), text: form.text.trim(), createDate: new Date().toISOString() }]);
-    setForm({ author: '', text: '' });
+    setForm({ author: currentUserEmail ?? '', text: '' });
   };
 
   const handleDelete = (item) => {

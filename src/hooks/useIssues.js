@@ -5,6 +5,7 @@ import issueService from '../services/issue.service';
 import projectService from '../services/project.service';
 import personService from '../services/person.service';
 import { useConfirm } from './useConfirm';
+import { useCurrentUser } from './useCurrentUser';
 
 // ─── Empty form ────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export const useIssues = () => {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const { email: currentUserEmail } = useCurrentUser();
 
   // ── Filtres ──
   const [searchTerm, setSearchTerm] = useState('');
@@ -203,7 +205,7 @@ export const useIssues = () => {
 
   const handleReportBugClick = () => {
     setEditingIssue(null);
-    setFormData({ ...EMPTY_ISSUE_FORM, type: 'BUG' });
+    setFormData({ ...EMPTY_ISSUE_FORM, type: 'BUG', reporter: currentUserEmail ?? '' });
     setShowReportForm(true);
     setShowModal(true);
   };
